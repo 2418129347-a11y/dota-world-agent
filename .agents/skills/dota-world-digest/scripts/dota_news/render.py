@@ -12,7 +12,7 @@ from .models import NewsItem
 from .pipeline import section_for, source_label
 
 
-SECTION_ORDER = ["今日重点", "官方与版本", "职业赛场", "战队与选手", "社区热点", "数据洞察"]
+SECTION_ORDER = ["中国 Dota 赛场", "全球焦点赛事", "圈内消息", "传奇选手动态", "官方与版本", "数据洞察"]
 DISPLAY_TZ = ZoneInfo(os.environ.get("DIGEST_TIMEZONE", "Asia/Shanghai"))
 
 
@@ -27,6 +27,25 @@ def _item_html(item: NewsItem, index: int) -> str:
     corroboration = ""
     if item.corroborating_sources:
         corroboration = f'<div class="corroboration">交叉来源：{html.escape("、".join(item.corroborating_sources))}</div>'
+    notes = []
+    if item.impact:
+        notes.append(f'<div class="impact"><strong>赛事影响</strong><span>{html.escape(item.impact)}</span></div>')
+    if item.editorial_note:
+        notes.append(f'<div class="editorial"><strong>编辑点评</strong><span>{html.escape(item.editorial_note)}</span></div>')
+    if not notes and item.why_it_matters:
+        notes.append(f'<div class="impact"><strong>值得关注</strong><span>{html.escape(item.why_it_matters)}</span></div>')
+    spotlights = []
+    for spotlight in item.spotlights:
+        damage = int(spotlight.get("hero_damage") or 0)
+        damage_text = f" · 英雄伤害 {damage:,}" if damage else ""
+        spotlights.append(
+            '<div class="spotlight">'
+            f'<span class="spotlight-label">{html.escape(str(spotlight.get("label") or "本场最佳"))}</span>'
+            f'<strong>{html.escape(str(spotlight.get("player") or ""))}</strong>'
+            f'<span>{html.escape(str(spotlight.get("team") or ""))} · {html.escape(str(spotlight.get("role") or ""))}</span>'
+            f'<span>{html.escape(str(spotlight.get("hero") or ""))} · KDA {html.escape(str(spotlight.get("kda") or ""))}{damage_text}</span>'
+            '</div>'
+        )
     return f"""
 <article class="news-card">
   <div class="news-index">{index:02d}</div>
@@ -34,7 +53,8 @@ def _item_html(item: NewsItem, index: int) -> str:
     <div class="meta"><span class="tier tier-{html.escape(item.source_tier)}">{html.escape(source_label(item))}</span><span>{html.escape(item.source_name)}</span><span>{item.published_at.astimezone(DISPLAY_TZ).strftime('%m-%d %H:%M')}</span></div>
     <h3><a href="{html.escape(item.url, quote=True)}">{html.escape(item.title_zh or item.title)}</a></h3>
     <p>{html.escape(item.summary_zh or item.summary)}</p>
-    <div class="why"><strong>为什么重要：</strong>{html.escape(item.why_it_matters)}</div>
+    {''.join(spotlights)}
+    {''.join(notes)}
     {corroboration}
   </div>
 </article>""".strip()
@@ -44,8 +64,7 @@ def render_html(items: list[NewsItem], template_path: Path, generated_at: dateti
     date_label = generated_at.astimezone(DISPLAY_TZ).strftime("%Y-%m-%d")
     subject = subject_for(items, date_label)
     sections: OrderedDict[str, list[NewsItem]] = OrderedDict((name, []) for name in SECTION_ORDER)
-    sections["今日重点"] = items[:3]
-    for item in items[3:]:
+    for item in items:
         sections.setdefault(section_for(item), []).append(item)
     blocks: list[str] = []
     index = 1
@@ -81,12 +100,19 @@ def render_text(items: list[NewsItem], generated_at: datetime, warnings: list[st
     if not items:
         lines.extend(["今日暂无重要更新。", ""])
     for index, item in enumerate(items, 1):
+        spotlight_lines = [
+            f"   {spotlight.get('label', '本场最佳')}：{spotlight.get('player')}｜{spotlight.get('team')}｜{spotlight.get('role')}｜{spotlight.get('hero')}｜KDA {spotlight.get('kda')}"
+            for spotlight in item.spotlights
+        ]
         lines.extend(
             [
                 f"{index}. {item.title_zh or item.title}",
                 f"   [{source_label(item)}] {item.source_name} · {item.published_at.astimezone(DISPLAY_TZ).strftime('%m-%d %H:%M')}",
                 f"   {item.summary_zh or item.summary}",
-                f"   为什么重要：{item.why_it_matters}",
+                *spotlight_lines,
+                *([f"   赛事影响：{item.impact}"] if item.impact else []),
+                *([f"   编辑点评：{item.editorial_note}"] if item.editorial_note else []),
+                *([f"   值得关注：{item.why_it_matters}"] if item.why_it_matters and not item.impact and not item.editorial_note else []),
                 f"   原文：{item.url}",
                 "",
             ]

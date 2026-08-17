@@ -23,7 +23,12 @@
     h3 { margin:9px 0 8px; font-size:18px; line-height:1.4; }
     h3 a { color:#fff; text-decoration:none; }
     p { margin:0 0 9px; color:#d5d8dc; font-size:14px; line-height:1.65; }
-    .why { padding:9px 10px; border-left:3px solid #c23c45; background:#111418; color:#c8ccd1; font-size:12px; line-height:1.55; }
+    .impact,.editorial { display:grid; grid-template-columns:72px 1fr; gap:8px; margin-top:9px; padding:10px 11px; border-left:3px solid #c23c45; background:#111418; color:#c8ccd1; font-size:12px; line-height:1.55; }
+    .editorial { border-left-color:#5f88a3; }
+    .impact strong,.editorial strong { color:#fff; }
+    .spotlight { display:grid; grid-template-columns:auto 1fr; gap:4px 9px; margin:10px 0; padding:11px; border:1px solid #39424d; border-radius:8px; background:#12171d; color:#aeb5bd; font-size:12px; }
+    .spotlight-label { grid-row:1 / span 2; align-self:center; padding:4px 7px; border-radius:999px; background:#7d2d35; color:#fff; font-weight:700; }
+    .spotlight strong { color:#fff; }
     .corroboration { margin-top:7px; color:#8f969f; font-size:11px; }
     .warnings { margin-top:24px; padding:12px; border-radius:8px; background:#272119; color:#d8c5a4; font-size:12px; line-height:1.5; }
     .footer { padding:22px 28px; background:#0c0f13; color:#7f8791; font-size:11px; line-height:1.6; }
@@ -35,7 +40,7 @@
     <header class="hero">
       <div class="eyebrow">DOTA WORLD DAILY · $date_label</div>
       <h1>刀塔世界日报</h1>
-      <p class="subtitle">从 $item_count 条高优先级动态开始 · 生成于 $generated_time</p>
+      <p class="subtitle">中国 Dota 全量追踪 · 全球焦点精选 · 今日收录 $item_count 条 · $generated_time</p>
     </header>
     <main class="content">
       $item_blocks
