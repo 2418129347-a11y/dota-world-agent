@@ -24,6 +24,14 @@ python .agents/skills/dota-world-digest/scripts/dota_digest.py `
 python .agents/skills/dota-world-digest/scripts/dota_digest.py --output-dir output
 ```
 
+按北京时间补做某个自然日（不会混入相邻日期）：
+
+```powershell
+python .agents/skills/dota-world-digest/scripts/dota_digest.py --date 2026-08-16 --ignore-seen --output-dir output
+```
+
+GitHub Actions 的手动运行也接受可选的 `date` 输入；指定日期时不会写入日常去重状态。
+
 ## 启用 AI 中文摘要
 
 设置 `OPENAI_API_KEY`，可选设置 `OPENAI_MODEL`；默认使用 `gpt-5.4-nano`。`--summarizer auto` 会在密钥存在时调用 OpenAI Responses API，失败则降级为确定性摘要。

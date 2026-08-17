@@ -4,7 +4,7 @@ import json
 import os
 import sys
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -15,9 +15,11 @@ sys.path.insert(0, str(SCRIPT_DIR))
 from unittest.mock import MagicMock, patch
 
 from dota_news.mailer import idempotency_key, send_email, smtp_config
+from dota_news.cli import filter_report_date
+from dota_news.collectors import collect_rss
 from dota_news.models import NewsItem
 from dota_news.pipeline import deduplicate, select_items, similarity
-from dota_news.editorial import apply_editorial_priority, china_relation, compose_digest, enrich_match_reports, merge_match_series
+from dota_news.editorial import apply_editorial_priority, apply_external_match_impacts, china_relation, circle_category, compose_digest, enrich_match_reports, merge_match_series
 from dota_news.render import render_html
 from dota_news.summarizers import apply_fallback
 from dota_news.utils import canonical_url, clean_text
@@ -145,12 +147,49 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(len(circle), 2)
         self.assertNotIn("d", [news.item_id for news in circle])
 
+    def test_match_recap_is_not_top_event_offstage_news(self) -> None:
+        recap = item("recap", "Team Yandex defeat LGD Gaming at The International 2026")
+        venue = item("venue", "The International 2026 venue and ticket schedule announced")
+        self.assertEqual(circle_category(recap, POLICY), "")
+        self.assertEqual(circle_category(venue, POLICY), "top_event_offstage")
+
+    def test_legend_alias_does_not_match_publisher_or_common_word_fragment(self) -> None:
+        publisher = item("publisher", "GosuGamers tournament report")
+        actual_player = item("player", "Ame announces comeback interview")
+        apply_editorial_priority([publisher, actual_player], POLICY, NOW)
+        self.assertEqual(publisher.priority_group, "")
+        self.assertEqual(actual_player.priority_group, "circle")
+
+    def test_report_date_uses_asia_shanghai_calendar_day(self) -> None:
+        previous_local_day = item("previous", "Previous")
+        previous_local_day.published_at = datetime(2026, 8, 16, 15, 59, tzinfo=timezone.utc)
+        target_local_day = item("target", "Target")
+        target_local_day.published_at = datetime(2026, 8, 16, 16, 1, tzinfo=timezone.utc)
+        self.assertEqual(filter_report_date([previous_local_day, target_local_day], date(2026, 8, 17)), [target_local_day])
+
+    def test_rss_publisher_allowlist_and_display_name(self) -> None:
+        xml = b"""<?xml version='1.0'?><rss><channel>
+        <item><title>Vici Gaming disbands - GosuGamers</title><link>https://example.com/vg</link><pubDate>Sun, 16 Aug 2026 07:10:41 GMT</pubDate><source>GosuGamers</source></item>
+        <item><title>Betting market - Unknown Site</title><link>https://example.com/bet</link><pubDate>Sun, 16 Aug 2026 07:10:41 GMT</pubDate><source>Unknown Site</source></item>
+        </channel></rss>"""
+        source = {"id": "news", "name": "Aggregator", "url": "https://example.com/rss", "tier": "media", "trust": 70, "publisher_from_feed": True, "allowed_publishers": ["GosuGamers"]}
+        with patch("dota_news.collectors._request", return_value=xml):
+            result = collect_rss(source, NOW)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].source_name, "GosuGamers")
+        self.assertEqual(result[0].title, "Vici Gaming disbands")
+
     def test_sensitive_circle_claim_needs_official_or_two_sources(self) -> None:
         rumor = item("ban", "Chinese player ban announced", trust=90)
         apply_editorial_priority([rumor], POLICY, NOW)
         self.assertEqual(compose_digest([rumor], POLICY), [])
         rumor.corroborating_sources = ["Media A", "Media B"]
         self.assertEqual(compose_digest([rumor], POLICY), [rumor])
+
+    def test_disband_does_not_trigger_ban_sensitive_term(self) -> None:
+        disband = item("disband", "Vici Gaming disband roster", trust=70)
+        apply_editorial_priority([disband], POLICY, NOW)
+        self.assertEqual(compose_digest([disband], POLICY), [disband])
 
     def test_match_card_uses_specific_labels_and_role(self) -> None:
         news = match_item("render-match", "LGD Gaming", "Opponent", series="")
@@ -190,6 +229,23 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(news.spotlights[0]["role"], "二号位（中路）")
         self.assertEqual(news.spotlights[1]["player"], "Whisper")
         self.assertIn("三号位风行者", news.editorial_note)
+
+    def test_media_evidence_adds_elimination_impact_to_match(self) -> None:
+        news = match_item("impact", "Team Yandex", "LGD Gaming")
+        news.metadata.update({"league": "The International 2026", "winner": "Team Yandex", "loser": "LGD Gaming"})
+        evidence = item("evidence", "Team Yandex defeat LGD Gaming to become the final team qualified for The International 2026 Playoffs", trust=70)
+        evidence.source_name = "GosuGamers"
+        apply_external_match_impacts([news], [evidence])
+        self.assertIn("LGD Gaming 未能晋级", news.impact)
+        self.assertEqual(news.corroborating_sources, ["GosuGamers"])
+
+    def test_fallback_writes_natural_chinese_disband_copy(self) -> None:
+        news = item("vg", "Vici Gaming disband immediately after getting eliminated from The International 2026", trust=70)
+        news.source_name = "GosuGamers"
+        news.metadata["interest_category"] = "china_roster"
+        apply_fallback([news])
+        self.assertEqual(news.title_zh, "Vici Gaming 宣布解散现有阵容")
+        self.assertIn("不等同于俱乐部永久退出", news.summary_zh)
 
     def test_idempotency_key_hides_recipient(self) -> None:
         key = idempotency_key(NOW.date(), "private@example.com")

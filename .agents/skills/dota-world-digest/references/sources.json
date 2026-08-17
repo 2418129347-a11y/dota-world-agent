@@ -23,6 +23,16 @@
       "url": "https://www.reddit.com/r/DotA2/.rss",
       "tier": "community",
       "trust": 42
+    },
+    {
+      "enabled": true,
+      "id": "google_news_dota2",
+      "name": "Google News / Dota 2",
+      "url": "https://news.google.com/rss/search?q=Dota+2+when%3A2d&hl=en-US&gl=US&ceid=US%3Aen",
+      "tier": "media",
+      "trust": 70,
+      "publisher_from_feed": true,
+      "allowed_publishers": ["GosuGamers", "Hotspawn", "Esports Charts", "Field Level Media", "Dot Esports"]
     }
   ],
   "ranking": {
