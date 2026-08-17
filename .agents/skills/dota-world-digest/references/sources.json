@@ -1,0 +1,49 @@
+{
+  "steam": {
+    "enabled": true,
+    "id": "steam_dota2",
+    "name": "Dota 2 / Steam 官方新闻",
+    "url": "https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=570&count=40&maxlength=1200&format=json",
+    "tier": "official",
+    "trust": 100
+  },
+  "opendota": {
+    "enabled": true,
+    "id": "opendota_pro_matches",
+    "name": "OpenDota 职业比赛",
+    "url": "https://api.opendota.com/api/proMatches",
+    "tier": "data",
+    "trust": 78
+  },
+  "rss": [
+    {
+      "enabled": true,
+      "id": "reddit_dota2",
+      "name": "r/DotA2 社区",
+      "url": "https://www.reddit.com/r/DotA2/.rss",
+      "tier": "community",
+      "trust": 42
+    }
+  ],
+  "ranking": {
+    "hours": 30,
+    "limit": 8,
+    "per_source": 2,
+    "min_score": 65,
+    "community_min_score": 78,
+    "duplicate_similarity": 0.72,
+    "keywords": {
+      "patch": 18,
+      "update": 12,
+      "gameplay": 14,
+      "international": 18,
+      "ti 2026": 18,
+      "major": 12,
+      "grand final": 12,
+      "roster": 10,
+      "transfer": 10,
+      "ban": 8,
+      "new hero": 18
+    }
+  }
+}

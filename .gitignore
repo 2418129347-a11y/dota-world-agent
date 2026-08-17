@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+.env
+.venv/
+output*/
+send-safety-check/
+state/
+.pytest_cache/

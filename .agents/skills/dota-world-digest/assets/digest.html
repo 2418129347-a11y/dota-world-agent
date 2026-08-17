@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>$subject</title>
+  <style>
+    body { margin:0; padding:0; background:#0b0d10; color:#e8eaed; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",Arial,sans-serif; }
+    .shell { max-width:720px; margin:0 auto; background:#11151a; }
+    .hero { padding:36px 34px 30px; background:linear-gradient(135deg,#171b21 0%,#281419 72%,#641f28 100%); border-bottom:3px solid #c23c45; }
+    .eyebrow { color:#ef9a9f; font-size:12px; letter-spacing:.16em; font-weight:700; }
+    h1 { margin:10px 0 8px; color:#fff; font-size:34px; line-height:1.15; }
+    .subtitle { margin:0; color:#c9cdd2; font-size:14px; }
+    .content { padding:25px 26px 38px; }
+    h2 { margin:28px 0 13px; padding-bottom:8px; border-bottom:1px solid #333941; color:#f4f5f6; font-size:18px; }
+    section:first-child h2 { margin-top:0; }
+    .news-card { display:flex; gap:14px; margin:0 0 13px; padding:17px; border:1px solid #2a3038; border-radius:12px; background:#171c22; }
+    .news-index { flex:0 0 28px; color:#d95b63; font-size:12px; font-weight:800; padding-top:3px; }
+    .news-body { min-width:0; }
+    .meta { display:flex; flex-wrap:wrap; gap:7px 10px; align-items:center; color:#9aa0a8; font-size:11px; }
+    .tier { display:inline-block; padding:3px 7px; border-radius:999px; background:#333; color:#fff; font-weight:700; }
+    .tier-official { background:#842d35; } .tier-data { background:#27556b; } .tier-media { background:#4d496e; } .tier-community { background:#4a4e53; }
+    h3 { margin:9px 0 8px; font-size:18px; line-height:1.4; }
+    h3 a { color:#fff; text-decoration:none; }
+    p { margin:0 0 9px; color:#d5d8dc; font-size:14px; line-height:1.65; }
+    .why { padding:9px 10px; border-left:3px solid #c23c45; background:#111418; color:#c8ccd1; font-size:12px; line-height:1.55; }
+    .corroboration { margin-top:7px; color:#8f969f; font-size:11px; }
+    .warnings { margin-top:24px; padding:12px; border-radius:8px; background:#272119; color:#d8c5a4; font-size:12px; line-height:1.5; }
+    .footer { padding:22px 28px; background:#0c0f13; color:#7f8791; font-size:11px; line-height:1.6; }
+    @media (max-width:560px) { .hero{padding:28px 22px}.content{padding:20px 14px}.news-card{padding:14px}h1{font-size:28px} }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="hero">
+      <div class="eyebrow">DOTA WORLD DAILY · $date_label</div>
+      <h1>刀塔世界日报</h1>
+      <p class="subtitle">从 $item_count 条高优先级动态开始 · 生成于 $generated_time</p>
+    </header>
+    <main class="content">
+      $item_blocks
+      $warning_block
+    </main>
+    <footer class="footer">本邮件以短摘要和原始链接为主，不复制完整文章；社区信息不等于官方确认。本内容不构成投注或投资建议。</footer>
+  </div>
+</body>
+</html>

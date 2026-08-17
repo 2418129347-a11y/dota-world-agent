@@ -1,0 +1,66 @@
+name: Daily Dota World Digest
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 8 * * *"
+      timezone: "Asia/Shanghai"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dota-world-digest-daily
+  cancel-in-progress: false
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Restore seen-item state
+        uses: actions/cache@v4
+        with:
+          path: state
+          key: dota-digest-state-${{ github.run_id }}
+          restore-keys: |
+            dota-digest-state-
+
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Build digest
+        shell: bash
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-5.4-nano' }}
+          MAIL_PROVIDER: smtp
+          SMTP_HOST: ${{ vars.SMTP_HOST || 'smtp.qq.com' }}
+          SMTP_PORT: ${{ vars.SMTP_PORT || '465' }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME || secrets.EMAIL_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD || secrets.EMAIL_PASSWORD }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          DIGEST_FROM: ${{ secrets.DIGEST_FROM }}
+          DIGEST_TO: ${{ secrets.DIGEST_TO || secrets.EMAIL_TO }}
+          ENABLE_SEND: ${{ vars.ENABLE_SEND }}
+        run: |
+          args=(--output-dir output --state-file state/seen.json --write-state --summarizer auto)
+          if [[ "$ENABLE_SEND" == "true" ]]; then
+            args+=(--send)
+          fi
+          python .agents/skills/dota-world-digest/scripts/dota_digest.py "${args[@]}"
+
+      - name: Upload digest and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dota-world-digest-${{ github.run_number }}
+          path: output
+          if-no-files-found: warn
+          retention-days: 14
