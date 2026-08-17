@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections import Counter
 from datetime import datetime, timezone
 from typing import Any
@@ -56,6 +57,17 @@ HEROES_ZH = {
 def _team_matches(name: str, candidates: list[str]) -> bool:
     normalized = name.casefold().strip()
     return any(candidate.casefold() in normalized or normalized in candidate.casefold() for candidate in candidates if candidate)
+
+
+def _alias_in_text(alias: str, text: str) -> bool:
+    return re.search(rf"(?<![a-z0-9_]){re.escape(alias.casefold())}(?![a-z0-9_])", text.casefold()) is not None
+
+
+def _sensitive_term_in_text(term: str, text: str) -> bool:
+    normalized = term.casefold()
+    if re.fullmatch(r"[a-z0-9_-]+", normalized):
+        return _alias_in_text(normalized, text)
+    return normalized in text.casefold()
 
 
 def china_relation(item: NewsItem, policy: dict[str, Any]) -> tuple[int, str]:
@@ -134,14 +146,15 @@ def circle_category(item: NewsItem, policy: dict[str, Any]) -> str:
     transfer = any(word in text for word in ("roster", "transfer", "signs", "joins", "leaves", "disband", "阵容", "转会", "解散"))
     player = any(word in text for word in ("retire", "comeback", "interview", "ban", "penalty", "退役", "复出", "采访", "禁赛"))
     event = any(word in text for word in ("the international", " ti ", "ti202", "major", "esl one", "dreamleague"))
+    offstage = any(word in text for word in ("venue", "prize pool", "schedule", "format", "rules", "invite", "ticket", "visa", "broadcast", "viewership", "场馆", "奖金", "赛程", "赛制", "规则", "直邀", "签证", "转播", "收视"))
     patch = any(word in text for word in ("patch", "gameplay update", "版本", "补丁"))
     ecosystem = any(word in text for word in ("academy", "youth", "青训", "生态", "联赛"))
-    legendary = any(name.casefold() in text for name in policy.get("legendary_players", []))
+    legendary = any(_alias_in_text(name, text) for name in policy.get("legendary_players", []))
     if china and transfer:
         return "china_roster"
     if china and player:
         return "china_player"
-    if event:
+    if event and offstage:
         return "top_event_offstage"
     if transfer and (legendary or not china):
         return "elite_transfer"
@@ -162,6 +175,8 @@ def apply_editorial_priority(items: list[NewsItem], policy: dict[str, Any], now:
         category = circle_category(item, policy)
         item.metadata["interest_category"] = category
         if not category:
+            if any(_alias_in_text(name, f"{item.title} {item.summary}") for name in policy.get("legendary_players", [])):
+                item.priority_group = "legend"
             continue
         item.priority_group = "circle"
         age_hours = max(0.0, (now - item.published_at.astimezone(timezone.utc)).total_seconds() / 3600)
@@ -184,7 +199,7 @@ def compose_digest(items: list[NewsItem], policy: dict[str, Any]) -> list[NewsIt
     for item in items:
         text = f"{item.title} {item.summary}".casefold()
         if item.priority_group == "circle":
-            sensitive = any(term in text for term in sensitive_terms)
+            sensitive = any(_sensitive_term_in_text(term, text) for term in sensitive_terms)
             trustworthy = item.trust >= int(policy.get("circle_trust_floor", 65))
             confirmed = item.source_tier == "official" or len(item.corroborating_sources) >= 2
             if trustworthy and (not sensitive or confirmed):
@@ -192,8 +207,7 @@ def compose_digest(items: list[NewsItem], policy: dict[str, Any]) -> list[NewsIt
         if item.category in {"official", "patch"} and item not in circle:
             item.priority_group = "official"
             official.append(item)
-        if any(name.casefold() in text for name in policy.get("legendary_players", [])) and item not in circle:
-            item.priority_group = "legend"
+        if item.priority_group == "legend" and item not in circle:
             legends.append(item)
 
     china.sort(key=lambda value: (value.published_at, value.score), reverse=True)
@@ -210,6 +224,29 @@ def compose_digest(items: list[NewsItem], policy: dict[str, Any]) -> list[NewsIt
     )
     seen: set[str] = set()
     return [item for item in result if not (item.item_id in seen or seen.add(item.item_id))]
+
+
+def apply_external_match_impacts(items: list[NewsItem], evidence_items: list[NewsItem]) -> None:
+    media = [item for item in evidence_items if item.source_tier in {"official", "media"} and item.trust >= 65]
+    for item in items:
+        if item.metadata.get("kind") != "match":
+            continue
+        winner = str(item.metadata.get("winner") or "")
+        loser = str(item.metadata.get("loser") or "")
+        league = str(item.metadata.get("league") or "本项赛事")
+        for evidence in media:
+            text = f"{evidence.title} {evidence.summary}".casefold()
+            if winner.casefold() not in text and loser.casefold() not in text:
+                continue
+            if winner.casefold() in text and "final team qualified" in text:
+                item.impact = f"{winner} 获得最后一个季后赛席位；{loser} 未能晋级，{league} 征程就此结束。"
+            elif loser.casefold() in text and any(term in text for term in ("eliminated", "elimination", "淘汰", "出局")):
+                item.impact = f"{loser} 在本轮失利后从 {league} 出局。"
+            else:
+                continue
+            if evidence.source_name not in item.corroborating_sources:
+                item.corroborating_sources.append(evidence.source_name)
+            break
 
 
 def _role(player: dict[str, Any], team_players: list[dict[str, Any]]) -> str:
@@ -312,7 +349,9 @@ def enrich_match_reports(items: list[NewsItem]) -> list[str]:
             if "三号位" in role:
                 item.editorial_note += f" {alias} 在末局用三号位{hero}打出 {key_player.get('kills', 0)}/{key_player.get('deaths', 0)}/{key_player.get('assists', 0)}，但仍未能帮助队伍赢下系列赛。"
         relation = str(item.metadata.get("china_relation") or "")
-        if relation:
+        if item.impact:
+            pass
+        elif relation:
             item.impact = f"本系列赛涉及{relation}，因此进入中国 Dota 全量追踪。晋级或淘汰结论仅在赛事官方赛程能够确认时写入。"
         else:
             item.impact = "该场进入全球焦点赛事栏；后续影响以赛事官方积分、分组或淘汰赛程为准。"

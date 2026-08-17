@@ -28,3 +28,4 @@ Only the six interests listed in `editorial-policy.json` are eligible. Rank elig
 - Steam `ISteamNews/GetNewsForApp/v2` for AppID 570: core official source.
 - OpenDota `proMatches` and match details: professional series grouping, player/hero statistics, and data-backed commentary. Team/player coverage is bounded by the public list plus the configurable watchlists.
 - r/DotA2 Atom feed: community signal, never authoritative by itself.
+- Google News Dota 2 RSS: discovery only, restricted to the publisher allowlist; display and score the underlying publisher rather than Google News.

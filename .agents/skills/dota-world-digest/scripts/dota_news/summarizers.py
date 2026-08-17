@@ -30,6 +30,14 @@ def apply_fallback(items: list[NewsItem]) -> list[NewsItem]:
         item.summary_zh = compact(summary.strip() or "来源摘要不可用，请查看原文。", 240)
         if not item.why_it_matters:
             item.why_it_matters = WHY.get(item.category, WHY["community"])
+        interest = str(item.metadata.get("interest_category") or "")
+        if interest == "china_roster" and re.search(r"\bdisbands?\b", item.title, flags=re.IGNORECASE):
+            team = re.split(r"\s+disbands?\b", item.title, maxsplit=1, flags=re.IGNORECASE)[0].strip()
+            item.title_zh = f"{team} 宣布解散现有阵容"
+            eliminated = bool(re.search(r"\beliminat(?:ed|ion)\b", item.title, flags=re.IGNORECASE))
+            timing = "在 TI 2026 出局后" if eliminated else "近日"
+            item.summary_zh = f"据 {item.source_name} 报道，{team} {timing}解散现有阵容；这不等同于俱乐部永久退出 Dota 2，仍需留意后续官方安排。"
+            item.why_it_matters = "这会直接影响中国战队版图、选手去向和后续赛事阵容。"
     return items
 
 

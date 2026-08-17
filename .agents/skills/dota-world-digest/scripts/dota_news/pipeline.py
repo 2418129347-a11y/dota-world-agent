@@ -93,6 +93,8 @@ def select_items(
         threshold = community_min_score if item.source_tier == "community" else min_score
         if item.score < threshold:
             continue
+        if editorial_policy and item.source_tier in {"media", "community"} and not item.priority_group:
+            continue
         if item.source_tier != "official" and item.priority_group != "china_match" and source_counts.get(item.source_id, 0) >= per_source:
             continue
         result.append(item)

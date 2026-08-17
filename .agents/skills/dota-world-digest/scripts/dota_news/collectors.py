@@ -108,10 +108,18 @@ def collect_rss(source: dict[str, Any], now: datetime) -> list[NewsItem]:
         url = _entry_link(entry)
         if not title or not url:
             continue
+        publisher = clean_text(_child_text(entry, ("source",)), 100) if source.get("publisher_from_feed") else ""
+        allowed_publishers = [str(value).casefold() for value in source.get("allowed_publishers", [])]
+        if allowed_publishers and publisher.casefold() not in allowed_publishers:
+            continue
+        if publisher and title.endswith(f" - {publisher}"):
+            title = title[: -(len(publisher) + 3)].strip()
         summary = clean_text(_child_text(entry, ("summary", "description", "content")), 1200)
         published = parse_datetime(_child_text(entry, ("published", "updated", "pubdate", "date")), now)
         item_id = clean_text(_child_text(entry, ("id", "guid")), 300) or stable_id(source["id"], url, title)
-        items.append(NewsItem(item_id, title, url, published, source["id"], source["name"], source["tier"], int(source["trust"]), summary, "community"))
+        source_name = publisher or source["name"]
+        source_id = f"{source['id']}:{publisher.casefold().replace(' ', '-')}" if publisher else source["id"]
+        items.append(NewsItem(item_id, title, url, published, source_id, source_name, source["tier"], int(source["trust"]), summary, "community"))
     return items
 
 

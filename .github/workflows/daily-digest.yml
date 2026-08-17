@@ -2,6 +2,11 @@ name: Daily Dota World Digest
 
 on:
   workflow_dispatch:
+    inputs:
+      date:
+        description: "Optional Asia/Shanghai report date (YYYY-MM-DD)"
+        required: false
+        type: string
   schedule:
     - cron: "17 8 * * *"
       timezone: "Asia/Shanghai"
@@ -50,7 +55,13 @@ jobs:
           DIGEST_TO: ${{ secrets.DIGEST_TO || secrets.EMAIL_TO }}
           ENABLE_SEND: ${{ vars.ENABLE_SEND }}
         run: |
-          args=(--output-dir output --state-file state/seen.json --write-state --summarizer auto)
+          args=(--output-dir output --state-file state/seen.json --summarizer auto)
+          report_date="${{ inputs.date }}"
+          if [[ -n "$report_date" ]]; then
+            args+=(--date "$report_date" --ignore-seen)
+          else
+            args+=(--write-state)
+          fi
           if [[ "$ENABLE_SEND" == "true" ]]; then
             args+=(--send)
           fi

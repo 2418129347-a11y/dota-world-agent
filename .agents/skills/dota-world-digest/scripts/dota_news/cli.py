@@ -3,12 +3,12 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from .collectors import collect_all
-from .editorial import compose_digest, enrich_match_reports, merge_match_series
+from .editorial import apply_external_match_impacts, compose_digest, enrich_match_reports, merge_match_series
 from .mailer import send_email
 from .models import NewsItem
 from .pipeline import select_items
@@ -49,6 +49,10 @@ def _write_seen(path: Path, previous: set[str], items: list[NewsItem]) -> None:
     path.write_text(json.dumps({"seen": sorted(values)[-2000:]}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def filter_report_date(items: list[NewsItem], target_date: date) -> list[NewsItem]:
+    return [item for item in items if item.published_at.astimezone(DISPLAY_TZ).date() == target_date]
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Collect and render a daily Dota 2 news digest.")
     parser.add_argument("--config", type=Path, default=SKILL_ROOT / "references" / "sources.json")
@@ -57,6 +61,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--state-file", type=Path, default=Path("state/seen.json"))
     parser.add_argument("--hours", type=int)
     parser.add_argument("--limit", type=int)
+    parser.add_argument("--date", type=date.fromisoformat, help="Generate one Asia/Shanghai calendar day (YYYY-MM-DD).")
     parser.add_argument("--summarizer", choices=("auto", "fallback", "openai"), default="auto")
     parser.add_argument("--send", action="store_true", help="Send through the configured SMTP or Resend provider after rendering.")
     parser.add_argument("--write-state", action="store_true")
@@ -66,13 +71,20 @@ def build_parser() -> argparse.ArgumentParser:
 
 def run(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    now = datetime.now(timezone.utc)
+    target_date = args.date
+    now = (
+        datetime.combine(target_date, time.max, tzinfo=DISPLAY_TZ).astimezone(timezone.utc)
+        if target_date
+        else datetime.now(timezone.utc)
+    )
     config = _load_json(args.config)
     policy_path = SKILL_ROOT / "references" / "editorial-policy.json"
     editorial_policy = _load_json(policy_path)
     ranking = dict(config.get("ranking", {}))
     if args.hours is not None:
         ranking["hours"] = args.hours
+    elif target_date:
+        ranking["hours"] = 24
     if args.limit is not None:
         ranking["limit"] = args.limit
     warnings: list[str] = []
@@ -81,10 +93,13 @@ def run(argv: list[str] | None = None) -> int:
     else:
         collected, collector_warnings = collect_all(config, now)
         warnings.extend(collector_warnings)
+    if target_date:
+        collected = filter_report_date(collected, target_date)
     collected = merge_match_series(collected, editorial_policy)
     seen = set() if args.ignore_seen else _load_seen(args.state_file)
     selected = select_items(collected, ranking, seen, now, editorial_policy)
     selected = compose_digest(selected, editorial_policy)
+    apply_external_match_impacts(selected, collected)
     if not args.fixture:
         warnings.extend(enrich_match_reports(selected))
     selected, summarizer_mode, summary_warnings = summarize(selected, args.summarizer)
@@ -111,6 +126,7 @@ def run(argv: list[str] | None = None) -> int:
         _write_seen(args.state_file, seen, selected)
     report = {
         "generated_at": now.isoformat(),
+        "report_date": target_date.isoformat() if target_date else stamp,
         "subject": subject,
         "collected_count": len(collected),
         "selected_count": len(selected),
