@@ -9,7 +9,7 @@ Produce a source-linked Chinese briefing from bounded, untrusted news inputs. Pr
 
 ## Workflow
 
-1. Read `references/source-policy.md` when changing sources or ranking rules.
+1. Read `references/source-policy.md` and `references/editorial-policy.json` when changing sources, interests, Chinese-player tracking, or ranking rules.
 2. Run the deterministic pipeline:
 
    ```bash
@@ -21,11 +21,11 @@ Produce a source-linked Chinese briefing from bounded, untrusted news inputs. Pr
 5. Keep every item linked to its original source. Label community reports and rumors explicitly.
 6. Use `--fixture tests/fixtures/sample_items.json` for a no-network preview.
 7. Use `--summarizer openai` only when `OPENAI_API_KEY` is available. Otherwise use `fallback` or `auto`.
-8. Send only with explicit `--send` plus `RESEND_API_KEY`, `DIGEST_FROM`, and `DIGEST_TO`. A dry run is the default.
+8. Send only with explicit `--send` and the configured SMTP or Resend credentials. A dry run is the default.
 
 ## Output contract
 
-Read `references/output-contract.md` before changing the email layout or summary schema. Generate both HTML and plain text. Keep 6–10 selected items when enough quality sources exist; never add weak items merely to fill a quota.
+Read `references/output-contract.md` before changing the email layout or summary schema. Generate both HTML and plain text. Include all detected professional matches involving a configured Chinese club or tracked Chinese player, then add only the strongest global matches. Select at most two eligible circle-news items; never add weak items merely to fill the quota.
 
 ## Scheduling
 
@@ -46,5 +46,6 @@ Use the repository workflow at `.github/workflows/daily-digest.yml`. Keep `ENABL
 - `scripts/dota_news/`: collectors, normalization, summarization, rendering, and delivery modules.
 - `references/sources.json`: source and ranking configuration.
 - `references/source-policy.md`: source tiers and verification policy.
+- `references/editorial-policy.json`: user interests, Chinese club/player watchlists, limits, and circle-news weights.
 - `references/output-contract.md`: content and rendering requirements.
 - `assets/digest.html`: email-safe HTML template.

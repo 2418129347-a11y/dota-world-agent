@@ -9,7 +9,11 @@
 
 ## Verification
 
-Prefer the highest-tier source when multiple items describe the same event. Keep the other source names as corroboration metadata. Treat roster moves, disciplinary action, match fixing, and personal allegations as sensitive: require an official statement or at least two independent credible sources. Otherwise label the item `传闻` and keep it out of the top-three section.
+Prefer the highest-tier source when multiple items describe the same event. Keep the other source names as corroboration metadata. Treat disciplinary action, match fixing, and personal allegations as sensitive: require an official statement or at least two independent credible sources. Otherwise exclude the item from the email.
+
+## Circle-news ranking
+
+Only the six interests listed in `editorial-policy.json` are eligible. Rank eligible items using credibility 30%, China relevance 25%, impact 20%, recency 10%, personal-interest match 10%, and heat/corroboration 5%. Require source trust of at least 65 and publish at most two. Quality wins over filling the quota.
 
 ## Collection rules
 
@@ -22,5 +26,5 @@ Prefer the highest-tier source when multiple items describe the same event. Keep
 ## Default sources
 
 - Steam `ISteamNews/GetNewsForApp/v2` for AppID 570: core official source.
-- OpenDota `proMatches`: optional professional-match result enrichment.
+- OpenDota `proMatches` and match details: professional series grouping, player/hero statistics, and data-backed commentary. Team/player coverage is bounded by the public list plus the configurable watchlists.
 - r/DotA2 Atom feed: community signal, never authoritative by itself.

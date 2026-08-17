@@ -8,6 +8,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from .collectors import collect_all
+from .editorial import compose_digest, enrich_match_reports, merge_match_series
 from .mailer import send_email
 from .models import NewsItem
 from .pipeline import select_items
@@ -67,6 +68,8 @@ def run(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     now = datetime.now(timezone.utc)
     config = _load_json(args.config)
+    policy_path = SKILL_ROOT / "references" / "editorial-policy.json"
+    editorial_policy = _load_json(policy_path)
     ranking = dict(config.get("ranking", {}))
     if args.hours is not None:
         ranking["hours"] = args.hours
@@ -78,8 +81,12 @@ def run(argv: list[str] | None = None) -> int:
     else:
         collected, collector_warnings = collect_all(config, now)
         warnings.extend(collector_warnings)
+    collected = merge_match_series(collected, editorial_policy)
     seen = set() if args.ignore_seen else _load_seen(args.state_file)
-    selected = select_items(collected, ranking, seen, now)
+    selected = select_items(collected, ranking, seen, now, editorial_policy)
+    selected = compose_digest(selected, editorial_policy)
+    if not args.fixture:
+        warnings.extend(enrich_match_reports(selected))
     selected, summarizer_mode, summary_warnings = summarize(selected, args.summarizer)
     warnings.extend(summary_warnings)
     args.output_dir.mkdir(parents=True, exist_ok=True)
