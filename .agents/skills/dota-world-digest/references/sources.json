@@ -27,7 +27,7 @@
   ],
   "ranking": {
     "hours": 30,
-    "limit": 8,
+    "limit": 14,
     "per_source": 2,
     "min_score": 65,
     "community_min_score": 78,

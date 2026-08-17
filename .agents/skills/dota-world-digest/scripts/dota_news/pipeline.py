@@ -5,14 +5,15 @@ from urllib.parse import urlsplit
 
 from .models import NewsItem
 from .utils import canonical_url, normalize_title, title_tokens
+from .editorial import apply_editorial_priority
 
 
 CATEGORY_LABELS = {
     "official": "官方与版本",
     "patch": "官方与版本",
-    "esports": "职业赛场",
-    "roster": "战队与选手",
-    "community": "社区热点",
+    "esports": "全球焦点赛事",
+    "roster": "圈内消息",
+    "community": "圈内消息",
     "data": "数据洞察",
 }
 
@@ -70,6 +71,7 @@ def select_items(
     ranking: dict,
     seen: set[str] | None = None,
     now: datetime | None = None,
+    editorial_policy: dict | None = None,
 ) -> list[NewsItem]:
     now = now or datetime.now(timezone.utc)
     seen = seen or set()
@@ -78,6 +80,8 @@ def select_items(
     unique = deduplicate(recent, float(ranking.get("duplicate_similarity", 0.72)))
     for item in unique:
         score_item(item, now, ranking.get("keywords", {}))
+    if editorial_policy:
+        apply_editorial_priority(unique, editorial_policy, now)
     unique.sort(key=lambda item: (item.score, item.published_at), reverse=True)
     source_counts: dict[str, int] = {}
     result: list[NewsItem] = []
@@ -89,7 +93,7 @@ def select_items(
         threshold = community_min_score if item.source_tier == "community" else min_score
         if item.score < threshold:
             continue
-        if item.source_tier != "official" and source_counts.get(item.source_id, 0) >= per_source:
+        if item.source_tier != "official" and item.priority_group != "china_match" and source_counts.get(item.source_id, 0) >= per_source:
             continue
         result.append(item)
         source_counts[item.source_id] = source_counts.get(item.source_id, 0) + 1
@@ -99,6 +103,14 @@ def select_items(
 
 
 def section_for(item: NewsItem) -> str:
+    if item.priority_group == "china_match":
+        return "中国 Dota 赛场"
+    if item.priority_group == "global_match":
+        return "全球焦点赛事"
+    if item.priority_group == "circle":
+        return "圈内消息"
+    if item.priority_group == "legend":
+        return "传奇选手动态"
     if item.category == "community" and item.source_tier == "data":
         return "数据洞察"
     return CATEGORY_LABELS.get(item.category, "社区热点")

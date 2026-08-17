@@ -28,7 +28,8 @@ def apply_fallback(items: list[NewsItem]) -> list[NewsItem]:
         summary = re.sub(r"忽略[^。；;]*(?:指令|提示)[^。；;]*[。；;]?", "", summary)
         summary = re.sub(r"(?i)(?:reveal|leak|print) (?:the )?(?:system prompt|secrets?)[^.!?。]*[.!?。]?", "", summary)
         item.summary_zh = compact(summary.strip() or "来源摘要不可用，请查看原文。", 240)
-        item.why_it_matters = WHY.get(item.category, WHY["community"])
+        if not item.why_it_matters:
+            item.why_it_matters = WHY.get(item.category, WHY["community"])
     return items
 
 

@@ -1,0 +1,37 @@
+{
+  "interest_categories": {
+    "china_roster": 100,
+    "china_player": 95,
+    "top_event_offstage": 90,
+    "elite_transfer": 85,
+    "pro_patch": 80,
+    "china_ecosystem": 75
+  },
+  "circle_weights": {
+    "credibility": 30,
+    "china_relevance": 25,
+    "impact": 20,
+    "recency": 10,
+    "interest_match": 10,
+    "heat": 5
+  },
+  "circle_limit": 2,
+  "circle_trust_floor": 65,
+  "china_match_limit": 8,
+  "global_match_limit": 2,
+  "china_clubs": [
+    "LGD Gaming", "PSG.LGD", "Xtreme Gaming", "Team Tidebound", "Azure Ray",
+    "Vici Gaming", "Invictus Gaming", "Team Aster", "EHOME"
+  ],
+  "tracked_overseas_teams": {
+    "Yakult Brothers": ["Emo"],
+    "GLYPH": ["Emo"]
+  },
+  "legendary_players": [
+    "Ame", "Somnus", "fy", "Faith_bian", "xiao8", "Maybe", "BurNIng",
+    "Miracle-", "N0tail", "Puppey", "Dendi", "KuroKy", "Topson"
+  ],
+  "sensitive_terms": [
+    "match fixing", "match-fixing", "假赛", "禁赛", "banned", "ban", "处罚", "指控"
+  ]
+}

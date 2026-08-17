@@ -57,10 +57,23 @@ def collect_opendota(source: dict[str, Any], now: datetime) -> list[NewsItem]:
         radiant_win = bool(raw.get("radiant_win"))
         winner = radiant if radiant_win else dire
         title = f"{league}：{radiant} {radiant_score}–{dire_score} {dire}"
-        summary = f"{winner} 赢得本场比赛。比赛数据来自 OpenDota；赛果应在重要赛事原始页面再次核验。"
+        summary = f"{winner} 赢得本局。比赛数据来自 OpenDota。"
         match_id = str(raw.get("match_id") or stable_id(source["id"], "", title))
         url = f"https://www.opendota.com/matches/{match_id}"
-        items.append(NewsItem(match_id, title, url, parse_datetime(raw.get("start_time"), now), source["id"], source["name"], source["tier"], int(source["trust"]), summary, "esports", [league]))
+        metadata = {
+            "kind": "match",
+            "match_id": match_id,
+            "match_ids": [match_id],
+            "series_id": str(raw.get("series_id") or ""),
+            "league": league,
+            "radiant": radiant,
+            "dire": dire,
+            "radiant_score": radiant_score,
+            "dire_score": dire_score,
+            "winner": winner,
+            "loser": dire if radiant_win else radiant,
+        }
+        items.append(NewsItem(match_id, title, url, parse_datetime(raw.get("start_time"), now), source["id"], source["name"], source["tier"], int(source["trust"]), summary, "esports", [league], metadata=metadata))
     return items
 
 

@@ -23,6 +23,11 @@ class NewsItem:
     title_zh: str = ""
     summary_zh: str = ""
     why_it_matters: str = ""
+    impact: str = ""
+    editorial_note: str = ""
+    priority_group: str = ""
+    spotlights: list[dict[str, Any]] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
