@@ -18,6 +18,7 @@
 - 输出比分、局时、经济领先变化、英雄、KDA、英雄伤害和位置推断。
 - 生成“本报 MVP”“末局关键选手”“赛事影响”和数据化编辑点评。
 - 圈内消息按可信度、中国相关度、影响力、时效、兴趣和热度加权。
+- 可收录与中国战队或关注选手有关的高热度社区传闻；必须同时通过赞同和评论量门槛，并明确标注“未经官方确认”。
 - 敏感消息要求官方来源或足够的独立交叉信源。
 - 支持 HTML 与纯文本邮件、QQ SMTP 和 Resend。
 - 支持按北京时间指定自然日补发，不污染日常去重状态。
@@ -97,7 +98,7 @@ python .agents/skills/dota-world-digest/scripts/dota_digest.py \
    - Secrets：`SMTP_USERNAME`、`SMTP_PASSWORD`、`DIGEST_TO`
    - Variable：`ENABLE_SEND=true`
 3. 打开 Actions，并手动运行一次 `Daily Dota World Digest` 验证配置。
-4. 默认工作流每天北京时间 08:17 运行；GitHub 云端排队可能造成少量延迟。
+4. 默认工作流在北京时间 08:23 首次运行，并在 08:38、08:53 备用重试；成功发送后，当天其余触发会自动跳过，不会重复投递。GitHub 云端排队仍可能造成延迟。
 
 指定日期补发：在 GitHub Actions 手动运行页面填写 `date`，格式为 `YYYY-MM-DD`。详细步骤见 [部署指南](docs/DEPLOYMENT.md)。
 
@@ -106,7 +107,7 @@ python .agents/skills/dota-world-digest/scripts/dota_digest.py \
 - Steam / Dota 2 官方新闻：官方公告与版本更新。
 - OpenDota：职业赛果和公开比赛数据。
 - RSS 与媒体白名单：新闻发现；邮件显示原始出版方，而不是聚合器名称。
-- Reddit：只作为社区热度信号，不能单独证明敏感事实。
+- Reddit：在最近 48 小时内，只收录同时达到 400 赞同和 60 条评论的中国相关阵容/选手传闻；每天最多一条，且不能单独证明任何事实或敏感指控。
 
 中国俱乐部、旅外选手名单和兴趣权重位于：
 
@@ -130,6 +131,7 @@ python .agents/skills/dota-world-digest/scripts/dota_digest.py \
 - 选手位置根据线路和经济数据推断，不等同于战队官方分工。
 - “本报 MVP”是本项目的数据化评选，不是赛事官方奖项。
 - 当天高可信圈内消息不足两条时会少发，不使用低质量内容填充。
+- GitHub Actions 的定时触发不提供严格准点保证；项目使用三次触发和按日防重复状态降低延迟与漏发概率。
 - 本项目不提供投注、投资或博彩建议。
 
 ## 参与贡献

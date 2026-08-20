@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import tempfile
 import unittest
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -15,13 +16,13 @@ sys.path.insert(0, str(SCRIPT_DIR))
 from unittest.mock import MagicMock, patch
 
 from dota_news.mailer import idempotency_key, send_email, smtp_config
-from dota_news.cli import filter_report_date
-from dota_news.collectors import collect_rss
+from dota_news.cli import filter_report_date, run
+from dota_news.collectors import collect_reddit, collect_rss
 from dota_news.models import NewsItem
 from dota_news.pipeline import deduplicate, select_items, similarity
 from dota_news.editorial import apply_editorial_priority, apply_external_match_impacts, china_relation, circle_category, compose_digest, enrich_match_reports, merge_match_series
 from dota_news.render import render_html
-from dota_news.summarizers import apply_fallback
+from dota_news.summarizers import apply_fallback, enforce_rumor_labels
 from dota_news.utils import canonical_url, clean_text
 
 
@@ -36,6 +37,14 @@ POLICY = {
     "interest_categories": {"china_roster": 100, "china_player": 95, "top_event_offstage": 90, "elite_transfer": 85, "pro_patch": 80, "china_ecosystem": 75},
     "circle_limit": 2,
     "circle_trust_floor": 65,
+    "community_rumor": {
+        "enabled": True,
+        "allowed_categories": ["china_roster", "china_player"],
+        "min_score": 400,
+        "min_comments": 60,
+        "max_age_hours": 48,
+        "daily_limit": 1,
+    },
     "china_match_limit": 8,
     "global_match_limit": 2,
     "china_clubs": ["LGD Gaming"],
@@ -179,6 +188,66 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(result[0].source_name, "GosuGamers")
         self.assertEqual(result[0].title, "Vici Gaming disbands")
 
+    def test_reddit_collector_requires_upvotes_and_comments(self) -> None:
+        payload = {"data": [
+            {"id": "hot", "title": "LGD roster rumor: Ame Topson XinQ", "selftext": "discussion", "created_utc": NOW.timestamp()},
+            {"id": "low", "title": "LGD roster rumor", "selftext": "discussion", "created_utc": NOW.timestamp()},
+        ]}
+        source = {
+            "id": "reddit", "name": "r/DotA2 社区", "url": "https://example.com/posts.json",
+            "tier": "community", "trust": 42,
+            "interest_keywords": ["lgd"],
+            "engagement": {"min_score": 400, "min_comments": 60, "comment_cap": 100},
+        }
+        embeds = [
+            b'<faceplate-number number="850" pretty></faceplate-number> upvotes',
+            b'<faceplate-number number="399" pretty></faceplate-number> upvotes',
+        ]
+        comments = {"data": [{"id": str(index)} for index in range(60)]}
+        with (
+            patch("dota_news.collectors._request", side_effect=embeds),
+            patch("dota_news.collectors.fetch_json", side_effect=[payload, comments]),
+        ):
+            result = collect_reddit(source, NOW)
+        self.assertEqual([news.item_id for news in result], ["t3_hot"])
+        self.assertEqual(result[0].metadata["engagement"]["comments"], 60)
+
+    def test_high_engagement_china_roster_rumor_is_labeled_and_selected(self) -> None:
+        rumor = item("rumor", "Lgd Topson for 1 more season?", trust=42, tier="community")
+        rumor.summary = "Maybe the rumours of Ame, Topson, Ws, Xinq and Sneyking is real?"
+        rumor.metadata["engagement"] = {"score": 850, "comments": 140}
+        apply_editorial_priority([rumor], POLICY, NOW)
+        self.assertTrue(rumor.metadata["community_rumor"])
+        self.assertEqual(compose_digest([rumor], POLICY), [rumor])
+        enforce_rumor_labels(apply_fallback([rumor]))
+        self.assertEqual(rumor.title_zh, "传闻：LGD 或考虑 Ame、Topson、WS、XinQ、Sneyking 阵容")
+        self.assertIn("新赛季", rumor.summary_zh)
+        self.assertIn("未经", rumor.summary_zh)
+        template = ROOT / ".agents" / "skills" / "dota-world-digest" / "assets" / "digest.html"
+        _, rendered = render_html([rumor], template, NOW, [])
+        self.assertIn("社区传闻", rendered)
+        self.assertIn("850 赞同", rendered)
+        self.assertIn("140 条评论", rendered)
+
+    def test_community_rumor_below_engagement_floor_is_excluded(self) -> None:
+        rumor = item("quiet-rumor", "LGD roster rumor: Ame Topson XinQ", trust=42, tier="community")
+        rumor.metadata["engagement"] = {"score": 800, "comments": 59}
+        apply_editorial_priority([rumor], POLICY, NOW)
+        self.assertFalse(rumor.metadata["community_rumor"])
+        self.assertEqual(compose_digest([rumor], POLICY), [])
+
+    def test_high_engagement_rumor_uses_48_hour_window_and_engagement_gate(self) -> None:
+        rumor = item("older-rumor", "Lgd Topson for 1 more season?", trust=42, hours_old=40, tier="community")
+        rumor.summary = "Maybe the rumours of Ame, Topson, Ws, Xinq and Sneyking is real?"
+        rumor.metadata = {"kind": "forum_post", "engagement": {"score": 622, "comments": 77}}
+        ranking = {"hours": 30, "limit": 8, "per_source": 2, "min_score": 65, "community_min_score": 78, "duplicate_similarity": 0.72, "keywords": {}}
+        selected = select_items([rumor], ranking, now=NOW, editorial_policy=POLICY)
+        self.assertEqual(compose_digest(selected, POLICY), [rumor])
+
+    def test_bank_does_not_trigger_player_ban_category(self) -> None:
+        event = item("bank", "The International venue schedule at SPD Bank arena in China")
+        self.assertEqual(circle_category(event, POLICY), "top_event_offstage")
+
     def test_sensitive_circle_claim_needs_official_or_two_sources(self) -> None:
         rumor = item("ban", "Chinese player ban announced", trust=90)
         apply_editorial_priority([rumor], POLICY, NOW)
@@ -296,6 +365,26 @@ class PipelineTests(unittest.TestCase):
         with patch.dict(os.environ, env, clear=True):
             with self.assertRaisesRegex(RuntimeError, "SMTP_PASSWORD"):
                 send_email("subject", "<p>html</p>", "text", NOW.date())
+
+    def test_cli_skips_duplicate_delivery_day(self) -> None:
+        fixture = ROOT / "tests" / "fixtures" / "sample_items.json"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output = Path(temp_dir) / "output"
+            state = Path(temp_dir) / "state.json"
+            state.write_text(json.dumps({"seen": [], "sent_dates": ["2026-08-17"]}), encoding="utf-8")
+            with patch("dota_news.cli.send_email") as mocked_send:
+                exit_code = run([
+                    "--fixture", str(fixture), "--output-dir", str(output), "--state-file", str(state),
+                    "--date", "2026-08-17", "--summarizer", "fallback", "--send",
+                    "--write-state", "--skip-if-sent-today",
+                ])
+            self.assertEqual(exit_code, 0)
+            mocked_send.assert_not_called()
+            report = json.loads((output / "report.json").read_text(encoding="utf-8"))
+            self.assertTrue(report["delivery"]["skipped"])
+            self.assertEqual(report["delivery"]["reason"], "already_sent_today")
+            updated_state = json.loads(state.read_text(encoding="utf-8"))
+            self.assertEqual(updated_state["seen"], [])
 
 
 if __name__ == "__main__":

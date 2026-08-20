@@ -142,9 +142,21 @@ def merge_match_series(items: list[NewsItem], policy: dict[str, Any]) -> list[Ne
 
 def circle_category(item: NewsItem, policy: dict[str, Any]) -> str:
     text = f"{item.title} {item.summary}".casefold()
-    china = any(word in text for word in ("china", "chinese", "中国", "lgd", "xtreme", "tidebound", "vici", "aster", "emo", "ame", "somnus"))
-    transfer = any(word in text for word in ("roster", "transfer", "signs", "joins", "leaves", "disband", "阵容", "转会", "解散"))
-    player = any(word in text for word in ("retire", "comeback", "interview", "ban", "penalty", "退役", "复出", "采访", "禁赛"))
+    tracked_players = [player for players in policy.get("tracked_overseas_teams", {}).values() for player in players]
+    china_entities = list(policy.get("china_clubs", [])) + tracked_players + [
+        "LGD", "Xtreme", "Tidebound", "Azure Ray", "Vici", "Invictus Gaming", "Aster", "EHOME",
+        "Emo", "Ame", "Somnus", "XinQ", "fy", "Faith_bian",
+    ]
+    china = any(word in text for word in ("china", "chinese", "中国")) or any(
+        _alias_in_text(entity, text) for entity in china_entities
+    )
+    transfer = any(word in text for word in (
+        "roster", "lineup", "transfer", "signs", "joins", "leaves", "disband",
+        "rumor", "rumour", "shuffle", "leak", "阵容", "转会", "解散", "传闻", "爆料",
+    ))
+    player = any(_alias_in_text(word, text) for word in ("retire", "comeback", "interview", "ban", "penalty")) or any(
+        word in text for word in ("退役", "复出", "采访", "禁赛")
+    )
     event = any(word in text for word in ("the international", " ti ", "ti202", "major", "esl one", "dreamleague"))
     offstage = any(word in text for word in ("venue", "prize pool", "schedule", "format", "rules", "invite", "ticket", "visa", "broadcast", "viewership", "场馆", "奖金", "赛程", "赛制", "规则", "直邀", "签证", "转播", "收视"))
     patch = any(word in text for word in ("patch", "gameplay update", "版本", "补丁"))
@@ -165,6 +177,20 @@ def circle_category(item: NewsItem, policy: dict[str, Any]) -> str:
     return ""
 
 
+def community_rumor_eligible(item: NewsItem, policy: dict[str, Any]) -> bool:
+    rules = policy.get("community_rumor", {})
+    if not rules.get("enabled", False) or item.source_tier != "community":
+        return False
+    category = str(item.metadata.get("interest_category") or "")
+    if category not in rules.get("allowed_categories", []):
+        return False
+    engagement = item.metadata.get("engagement", {})
+    return (
+        int(engagement.get("score") or 0) >= int(rules.get("min_score", 400))
+        and int(engagement.get("comments") or 0) >= int(rules.get("min_comments", 60))
+    )
+
+
 def apply_editorial_priority(items: list[NewsItem], policy: dict[str, Any], now: datetime) -> None:
     category_values = policy.get("interest_categories", {})
     for item in items:
@@ -179,13 +205,15 @@ def apply_editorial_priority(items: list[NewsItem], policy: dict[str, Any], now:
                 item.priority_group = "legend"
             continue
         item.priority_group = "circle"
+        item.metadata["community_rumor"] = community_rumor_eligible(item, policy)
         age_hours = max(0.0, (now - item.published_at.astimezone(timezone.utc)).total_seconds() / 3600)
         credibility = min(30.0, item.trust * 0.30)
         china_score = 25.0 if category.startswith("china_") else 0.0
         impact = min(20.0, category_values.get(category, 0) * 0.20)
         recency = max(0.0, 10.0 - age_hours / 12)
         interest = min(10.0, category_values.get(category, 0) * 0.10)
-        heat = min(5.0, len(item.corroborating_sources) * 2.5)
+        engagement_heat = 5.0 if item.metadata.get("community_rumor") else 0.0
+        heat = max(engagement_heat, min(5.0, len(item.corroborating_sources) * 2.5))
         item.metadata["circle_score"] = round(credibility + china_score + impact + recency + interest + heat, 2)
 
 
@@ -200,7 +228,7 @@ def compose_digest(items: list[NewsItem], policy: dict[str, Any]) -> list[NewsIt
         text = f"{item.title} {item.summary}".casefold()
         if item.priority_group == "circle":
             sensitive = any(_sensitive_term_in_text(term, text) for term in sensitive_terms)
-            trustworthy = item.trust >= int(policy.get("circle_trust_floor", 65))
+            trustworthy = item.trust >= int(policy.get("circle_trust_floor", 65)) or bool(item.metadata.get("community_rumor"))
             confirmed = item.source_tier == "official" or len(item.corroborating_sources) >= 2
             if trustworthy and (not sensitive or confirmed):
                 circle.append(item)
@@ -215,10 +243,21 @@ def compose_digest(items: list[NewsItem], policy: dict[str, Any]) -> list[NewsIt
     circle.sort(key=lambda value: (value.metadata.get("circle_score", 0), value.score), reverse=True)
     official.sort(key=lambda value: value.score, reverse=True)
     legends.sort(key=lambda value: value.score, reverse=True)
+    circle_selected: list[NewsItem] = []
+    rumor_count = 0
+    rumor_limit = int(policy.get("community_rumor", {}).get("daily_limit", 1))
+    for item in circle:
+        if item.metadata.get("community_rumor"):
+            if rumor_count >= rumor_limit:
+                continue
+            rumor_count += 1
+        circle_selected.append(item)
+        if len(circle_selected) >= int(policy.get("circle_limit", 2)):
+            break
     result = (
         china[: int(policy.get("china_match_limit", 8))]
         + global_matches[: int(policy.get("global_match_limit", 2))]
-        + circle[: int(policy.get("circle_limit", 2))]
+        + circle_selected
         + legends[:1]
         + official[:2]
     )

@@ -62,7 +62,17 @@ def score_item(item: NewsItem, now: datetime, keywords: dict[str, int]) -> float
     lower = f"{item.title} {item.summary}".lower()
     if any(word in lower for word in ("match fixing", "match-fixing", "ban", "banned", "假赛", "禁赛")) and item.source_tier != "official" and not item.corroborating_sources:
         sensitive_penalty = 30
-    item.score = round(item.trust + recency + corroboration + tier_bonus + _keyword_score(item, keywords) - sensitive_penalty, 2)
+    engagement = item.metadata.get("engagement", {})
+    engagement_bonus = min(
+        25.0,
+        int(engagement.get("score") or 0) / 100
+        + int(engagement.get("comments") or 0) / 15
+    )
+    item.score = round(
+        item.trust + recency + corroboration + tier_bonus + engagement_bonus
+        + _keyword_score(item, keywords) - sensitive_penalty,
+        2,
+    )
     return item.score
 
 
@@ -76,7 +86,17 @@ def select_items(
     now = now or datetime.now(timezone.utc)
     seen = seen or set()
     hours = int(ranking.get("hours", 30))
-    recent = [item for item in items if is_recent(item, now, hours) and item.item_id not in seen and canonical_url(item.url) not in seen]
+    rumor_hours = int((editorial_policy or {}).get("community_rumor", {}).get("max_age_hours", hours))
+    recent = [
+        item
+        for item in items
+        if (
+            is_recent(item, now, hours)
+            or (item.metadata.get("kind") == "forum_post" and is_recent(item, now, rumor_hours))
+        )
+        and item.item_id not in seen
+        and canonical_url(item.url) not in seen
+    ]
     unique = deduplicate(recent, float(ranking.get("duplicate_similarity", 0.72)))
     for item in unique:
         score_item(item, now, ranking.get("keywords", {}))
@@ -91,6 +111,8 @@ def select_items(
     community_min_score = float(ranking.get("community_min_score", min_score))
     for item in unique:
         threshold = community_min_score if item.source_tier == "community" else min_score
+        if item.metadata.get("community_rumor"):
+            threshold = 0
         if item.score < threshold:
             continue
         if editorial_policy and item.source_tier in {"media", "community"} and not item.priority_group:
@@ -119,6 +141,8 @@ def section_for(item: NewsItem) -> str:
 
 
 def source_label(item: NewsItem) -> str:
+    if item.metadata.get("community_rumor"):
+        return "社区传闻"
     labels = {"official": "官方", "data": "数据源", "media": "媒体", "community": "社区"}
     return labels.get(item.source_tier, item.source_tier)
 

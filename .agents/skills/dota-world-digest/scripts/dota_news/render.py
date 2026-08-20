@@ -27,6 +27,15 @@ def _item_html(item: NewsItem, index: int) -> str:
     corroboration = ""
     if item.corroborating_sources:
         corroboration = f'<div class="corroboration">交叉来源：{html.escape("、".join(item.corroborating_sources))}</div>'
+    engagement_html = ""
+    engagement = item.metadata.get("engagement", {})
+    if item.metadata.get("community_rumor") and engagement:
+        comments_suffix = "+" if engagement.get("comments_capped") else ""
+        engagement_html = (
+            '<div class="corroboration">社区热度：'
+            f'{int(engagement.get("score") or 0):,} 赞同 · '
+            f'{int(engagement.get("comments") or 0):,}{comments_suffix} 条评论</div>'
+        )
     notes = []
     if item.impact:
         notes.append(f'<div class="impact"><strong>赛事影响</strong><span>{html.escape(item.impact)}</span></div>')
@@ -55,6 +64,7 @@ def _item_html(item: NewsItem, index: int) -> str:
     <p>{html.escape(item.summary_zh or item.summary)}</p>
     {''.join(spotlights)}
     {''.join(notes)}
+    {engagement_html}
     {corroboration}
   </div>
 </article>""".strip()
@@ -100,6 +110,14 @@ def render_text(items: list[NewsItem], generated_at: datetime, warnings: list[st
     if not items:
         lines.extend(["今日暂无重要更新。", ""])
     for index, item in enumerate(items, 1):
+        engagement = item.metadata.get("engagement", {})
+        engagement_line = ""
+        if item.metadata.get("community_rumor") and engagement:
+            comments_suffix = "+" if engagement.get("comments_capped") else ""
+            engagement_line = (
+                f"   社区热度：{int(engagement.get('score') or 0):,} 赞同 · "
+                f"{int(engagement.get('comments') or 0):,}{comments_suffix} 条评论"
+            )
         spotlight_lines = [
             f"   {spotlight.get('label', '本场最佳')}：{spotlight.get('player')}｜{spotlight.get('team')}｜{spotlight.get('role')}｜{spotlight.get('hero')}｜KDA {spotlight.get('kda')}"
             for spotlight in item.spotlights
@@ -109,6 +127,7 @@ def render_text(items: list[NewsItem], generated_at: datetime, warnings: list[st
                 f"{index}. {item.title_zh or item.title}",
                 f"   [{source_label(item)}] {item.source_name} · {item.published_at.astimezone(DISPLAY_TZ).strftime('%m-%d %H:%M')}",
                 f"   {item.summary_zh or item.summary}",
+                *([engagement_line] if engagement_line else []),
                 *spotlight_lines,
                 *([f"   赛事影响：{item.impact}"] if item.impact else []),
                 *([f"   编辑点评：{item.editorial_note}"] if item.editorial_note else []),

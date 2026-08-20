@@ -1,4 +1,4 @@
 interface:
-  display_name: "µ¶ËşÊÀ½çÈÕ±¨"
-  short_description: "¾ÛºÏ¡¢ºËÑé¡¢±àÅÅ²¢·¢ËÍÃ¿ÈÕ Dota 2 ÖĞÎÄĞÂÎÅ¼ò±¨"
-  default_prompt: "Use $dota-world-digest to collect and draft today's Dota 2 news digest."
+  display_name: "DOTA æ¯æ—¥æ¸¸æŠ¥"
+  short_description: "é‡‡é›†ã€æ ¸éªŒå¹¶å‘é€æ¯æ—¥ Dota 2 ä¸­æ–‡æ–°é—»ç®€æŠ¥"
+  default_prompt: "Use $dota-world-digest to collect, verify, and draft today's Chinese Dota 2 news digest."

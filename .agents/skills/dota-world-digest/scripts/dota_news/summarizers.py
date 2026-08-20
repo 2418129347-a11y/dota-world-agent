@@ -41,6 +41,34 @@ def apply_fallback(items: list[NewsItem]) -> list[NewsItem]:
     return items
 
 
+def enforce_rumor_labels(items: list[NewsItem]) -> list[NewsItem]:
+    for item in items:
+        if not item.metadata.get("community_rumor"):
+            continue
+        title = item.title_zh or item.title
+        raw = f"{item.title} {item.summary}"
+        roster_match = re.search(r"rumou?rs?\s+of\s+(.+?)\s+(?:is|are)\s+real", raw, flags=re.IGNORECASE)
+        team_match = re.search(r"\b(?:PSG\.)?LGD\b", raw, flags=re.IGNORECASE)
+        if roster_match and team_match and not re.search(r"[\u4e00-\u9fff]", title):
+            roster = re.sub(r"\s+and\s+", "、", roster_match.group(1), flags=re.IGNORECASE)
+            roster = re.sub(r"\s*,\s*", "、", roster).strip(" 、?.")
+            roster = re.sub(r"(?<![A-Za-z0-9_])ws(?![A-Za-z0-9_])", "WS", roster, flags=re.IGNORECASE)
+            roster = re.sub(r"(?<![A-Za-z0-9_])xinq(?![A-Za-z0-9_])", "XinQ", roster, flags=re.IGNORECASE)
+            team = "LGD"
+            item.title_zh = f"传闻：{team} 或考虑 {roster} 阵容"
+            item.summary_zh = f"r/DotA2 高热度帖子正在讨论 {team} 是否会在新赛季尝试由 {roster} 组成的阵容；目前未经俱乐部、选手或赛事官方确认。"
+            item.why_it_matters = "该说法在社区形成高热度讨论，但只能作为阵容动向线索，不能视为官宣。"
+            continue
+        if not title.startswith(("传闻：", "社区传闻：")):
+            item.title_zh = f"传闻：{title}"
+        summary = item.summary_zh or item.summary or item.title
+        if "未经官方确认" not in summary:
+            summary = summary.rstrip("。") + "；目前未经俱乐部、选手或赛事官方确认。"
+        item.summary_zh = compact(summary, 300)
+        item.why_it_matters = "该说法在社区形成高热度讨论，但只能作为阵容动向线索，不能视为官宣。"
+    return items
+
+
 def _extract_output_text(payload: dict[str, Any]) -> str:
     if isinstance(payload.get("output_text"), str):
         return payload["output_text"]
@@ -84,6 +112,8 @@ def apply_openai(items: list[NewsItem], model: str | None = None, timeout: int =
             "source_tier": item.source_tier,
             "published_at": item.published_at.isoformat(),
             "category_hint": item.category,
+            "community_rumor": bool(item.metadata.get("community_rumor")),
+            "engagement": item.metadata.get("engagement", {}),
         }
         for item in items
     ]
@@ -129,12 +159,12 @@ def summarize(items: list[NewsItem], mode: str = "auto") -> tuple[list[NewsItem]
     if not items:
         return items, "none", warnings
     if mode == "fallback":
-        return apply_fallback(items), "fallback", warnings
+        return enforce_rumor_labels(apply_fallback(items)), "fallback", warnings
     if mode == "openai" or (mode == "auto" and os.environ.get("OPENAI_API_KEY")):
         try:
-            return apply_openai(items), "openai", warnings
+            return enforce_rumor_labels(apply_openai(items)), "openai", warnings
         except Exception as exc:
             if mode == "openai":
                 raise
             warnings.append(f"OpenAI 摘要失败，已降级：{type(exc).__name__}: {exc}")
-    return apply_fallback(items), "fallback", warnings
+    return enforce_rumor_labels(apply_fallback(items)), "fallback", warnings

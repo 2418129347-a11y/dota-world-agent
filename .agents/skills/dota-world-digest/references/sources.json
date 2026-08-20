@@ -20,9 +20,26 @@
       "enabled": true,
       "id": "reddit_dota2",
       "name": "r/DotA2 社区",
-      "url": "https://www.reddit.com/r/DotA2/.rss",
+      "url": "https://arctic-shift.photon-reddit.com/api/posts/search?subreddit=DotA2&after=2d&limit=auto&sort=desc&fields=id,title,selftext,created_utc,url",
+      "format": "reddit_engagement",
       "tier": "community",
-      "trust": 42
+      "trust": 42,
+      "comments_api": "https://arctic-shift.photon-reddit.com/api/comments/search",
+      "engagement_candidate_limit": 8,
+      "interest_keywords": [
+        "china", "chinese", "lgd", "xtreme", "tidebound", "azure ray", "vici",
+        "invictus gaming", "team aster", "ehome", "ame", "xinq", "somnus", "emo",
+        "faith_bian", "fy"
+      ],
+      "topic_keywords": [
+        "rumor", "rumour", "roster", "lineup", "transfer", "sign", "join", "replace",
+        "kick", "leak", "shuffle", "阵容", "转会", "加盟", "爆料"
+      ],
+      "engagement": {
+        "min_score": 400,
+        "min_comments": 60,
+        "comment_cap": 100
+      }
     },
     {
       "enabled": true,

@@ -40,7 +40,7 @@ To backfill a calendar day, enter an Asia/Shanghai date such as `2026-08-16`. Da
 
 ## 5. Schedule
 
-The included workflow runs every day at 08:17 in `Asia/Shanghai`. Scheduled GitHub Actions can be delayed by platform load. They run in GitHub's cloud and do not require a local computer or Codex session.
+The included workflow uses UTC cron entries equivalent to 08:23, 08:38, and 08:53 in `Asia/Shanghai`. The first successful delivery records the local calendar day in the cached state, so later backup runs skip SMTP delivery. Scheduled GitHub Actions can still be delayed by platform load. They run in GitHub's cloud and do not require a local computer or Codex session.
 
 ## Troubleshooting
 

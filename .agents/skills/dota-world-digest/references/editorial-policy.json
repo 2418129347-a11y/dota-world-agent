@@ -17,6 +17,14 @@
   },
   "circle_limit": 2,
   "circle_trust_floor": 65,
+  "community_rumor": {
+    "enabled": true,
+    "allowed_categories": ["china_roster", "china_player"],
+    "min_score": 400,
+    "min_comments": 60,
+    "max_age_hours": 48,
+    "daily_limit": 1
+  },
   "china_match_limit": 8,
   "global_match_limit": 2,
   "china_clubs": [
@@ -28,7 +36,7 @@
     "GLYPH": ["Emo"]
   },
   "legendary_players": [
-    "Ame", "Somnus", "fy", "Faith_bian", "xiao8", "Maybe", "BurNIng",
+    "Ame", "Somnus", "fy", "Faith_bian", "XinQ", "xiao8", "Maybe", "BurNIng",
     "Miracle-", "N0tail", "Puppey", "Dendi", "KuroKy", "Topson"
   ],
   "sensitive_terms": [

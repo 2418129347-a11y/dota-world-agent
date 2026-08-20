@@ -30,23 +30,38 @@ def _load_fixture(path: Path) -> list[NewsItem]:
     return [NewsItem.from_dict(item) for item in data]
 
 
-def _load_seen(path: Path) -> set[str]:
+def _load_state(path: Path) -> dict:
     if not path.exists():
-        return set()
+        return {"seen": [], "sent_dates": []}
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-        return set(data.get("seen", []))
+        return data if isinstance(data, dict) else {"seen": [], "sent_dates": []}
     except (OSError, ValueError):
-        return set()
+        return {"seen": [], "sent_dates": []}
 
 
-def _write_seen(path: Path, previous: set[str], items: list[NewsItem]) -> None:
+def _write_state(
+    path: Path,
+    previous: set[str],
+    sent_dates: set[str],
+    items: list[NewsItem],
+    delivered_date: str | None = None,
+) -> None:
     values = set(previous)
     for item in items:
         values.add(item.item_id)
         values.add(canonical_url(item.url))
+    if delivered_date:
+        sent_dates.add(delivered_date)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"seen": sorted(values)[-2000:]}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(
+            {"seen": sorted(values)[-2000:], "sent_dates": sorted(sent_dates)[-90:]},
+            ensure_ascii=False,
+            indent=2,
+        ) + "\n",
+        encoding="utf-8",
+    )
 
 
 def filter_report_date(items: list[NewsItem], target_date: date) -> list[NewsItem]:
@@ -66,6 +81,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--send", action="store_true", help="Send through the configured SMTP or Resend provider after rendering.")
     parser.add_argument("--write-state", action="store_true")
     parser.add_argument("--ignore-seen", action="store_true")
+    parser.add_argument("--skip-if-sent-today", action="store_true", help="Skip delivery when state records a successful send for the current Asia/Shanghai day.")
     return parser
 
 
@@ -96,7 +112,9 @@ def run(argv: list[str] | None = None) -> int:
     if target_date:
         collected = filter_report_date(collected, target_date)
     collected = merge_match_series(collected, editorial_policy)
-    seen = set() if args.ignore_seen else _load_seen(args.state_file)
+    state = _load_state(args.state_file)
+    seen = set() if args.ignore_seen else set(state.get("seen", []))
+    sent_dates = set(state.get("sent_dates", []))
     selected = select_items(collected, ranking, seen, now, editorial_policy)
     selected = compose_digest(selected, editorial_policy)
     apply_external_match_impacts(selected, collected)
@@ -114,16 +132,26 @@ def run(argv: list[str] | None = None) -> int:
     html_path.write_text(html_body, encoding="utf-8")
     text_path.write_text(text_body, encoding="utf-8")
     delivery: dict = {"requested": args.send, "sent": False}
+    delivery_date = now.astimezone(DISPLAY_TZ).date().isoformat()
     if args.send:
-        response = send_email(subject, html_body, text_body, now.astimezone(DISPLAY_TZ).date())
-        delivery = {
-            "requested": True,
-            "sent": True,
-            "provider": response.get("provider"),
-            "provider_id": response.get("id"),
-        }
+        if args.skip_if_sent_today and delivery_date in sent_dates:
+            delivery = {"requested": True, "sent": False, "skipped": True, "reason": "already_sent_today"}
+        else:
+            response = send_email(subject, html_body, text_body, now.astimezone(DISPLAY_TZ).date())
+            delivery = {
+                "requested": True,
+                "sent": True,
+                "provider": response.get("provider"),
+                "provider_id": response.get("id"),
+            }
     if args.write_state:
-        _write_seen(args.state_file, seen, selected)
+        _write_state(
+            args.state_file,
+            seen,
+            sent_dates,
+            [] if delivery.get("skipped") else selected,
+            delivery_date if delivery.get("sent") else None,
+        )
     report = {
         "generated_at": now.isoformat(),
         "report_date": target_date.isoformat() if target_date else stamp,

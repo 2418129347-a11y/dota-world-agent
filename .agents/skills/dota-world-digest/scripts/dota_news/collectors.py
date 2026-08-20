@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import re
 import ssl
+import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import urlencode
 
 from .models import NewsItem
 from .utils import clean_text, parse_datetime, stable_id
@@ -23,6 +26,16 @@ def _request(url: str, timeout: int = 15) -> bytes:
 
 def fetch_json(url: str, timeout: int = 15) -> Any:
     return json.loads(_request(url, timeout).decode("utf-8", errors="replace"))
+
+
+def fetch_json_retry(url: str, timeout: int = 20, attempts: int = 2) -> Any:
+    for attempt in range(attempts):
+        try:
+            return fetch_json(url, timeout)
+        except urllib.error.HTTPError as exc:
+            if attempt + 1 >= attempts or exc.code not in {422, 429, 500, 502, 503, 504}:
+                raise
+    raise RuntimeError("JSON request exhausted retries")
 
 
 def collect_steam(source: dict[str, Any], now: datetime) -> list[NewsItem]:
@@ -123,6 +136,73 @@ def collect_rss(source: dict[str, Any], now: datetime) -> list[NewsItem]:
     return items
 
 
+def collect_reddit(source: dict[str, Any], now: datetime) -> list[NewsItem]:
+    payload = fetch_json_retry(source["url"], timeout=30)
+    thresholds = source.get("engagement", {})
+    min_score = int(thresholds.get("min_score", 0))
+    min_comments = int(thresholds.get("min_comments", 0))
+    comment_cap = max(min_comments, int(thresholds.get("comment_cap", 100)))
+    keywords = [str(value).casefold() for value in source.get("interest_keywords", [])]
+    topic_keywords = [str(value).casefold() for value in source.get("topic_keywords", [])]
+    candidate_limit = int(source.get("engagement_candidate_limit", 8))
+    comments_api = str(source.get("comments_api") or "https://arctic-shift.photon-reddit.com/api/comments/search")
+    items: list[NewsItem] = []
+    candidate_count = 0
+    for raw in payload.get("data", []):
+        post_id = clean_text(raw.get("id"), 30)
+        title = clean_text(raw.get("title"), 300)
+        summary = clean_text(raw.get("selftext"), 1200)
+        if not post_id or not title:
+            continue
+        text = f"{title} {summary}".casefold()
+        if keywords and not any(
+            re.search(rf"(?<![a-z0-9_]){re.escape(keyword)}(?![a-z0-9_])", text)
+            if re.fullmatch(r"[a-z0-9_-]+", keyword)
+            else keyword in text
+            for keyword in keywords
+        ):
+            continue
+        if topic_keywords and not any(keyword in text for keyword in topic_keywords):
+            continue
+        candidate_count += 1
+        if candidate_count > candidate_limit:
+            break
+        url = f"https://www.reddit.com/r/DotA2/comments/{post_id}/"
+        item = NewsItem(
+            f"t3_{post_id}", title, url, parse_datetime(raw.get("created_utc"), now),
+            source["id"], source["name"], source["tier"], int(source["trust"]),
+            summary, "community",
+        )
+        try:
+            embed_url = f"https://embed.reddit.com/r/DotA2/comments/{post_id}/"
+            embed_html = _request(embed_url, timeout=10).decode("utf-8", errors="replace")
+            score_match = re.search(
+                r'<faceplate-number\s+number="(\d+)"[^>]*></faceplate-number>\s*upvotes',
+                embed_html,
+                flags=re.IGNORECASE,
+            )
+            score = int(score_match.group(1)) if score_match else 0
+            if score < min_score:
+                continue
+            query = urlencode({"link_id": post_id, "limit": comment_cap, "fields": "id"})
+            comment_payload = fetch_json_retry(f"{comments_api}?{query}", timeout=15)
+            comments = len(comment_payload.get("data", []))
+        except Exception:
+            continue
+        if comments < min_comments:
+            continue
+        item.metadata = {
+            "kind": "forum_post",
+            "engagement": {
+                "score": score,
+                "comments": comments,
+                "comments_capped": comments >= comment_cap,
+            },
+        }
+        items.append(item)
+    return items
+
+
 def collect_all(config: dict[str, Any], now: datetime | None = None) -> tuple[list[NewsItem], list[str]]:
     now = now or datetime.now(timezone.utc)
     items: list[NewsItem] = []
@@ -134,7 +214,8 @@ def collect_all(config: dict[str, Any], now: datetime | None = None) -> tuple[li
         jobs.append((config["opendota"]["name"], collect_opendota, config["opendota"]))
     for source in config.get("rss", []):
         if source.get("enabled"):
-            jobs.append((source["name"], collect_rss, source))
+            collector = collect_reddit if source.get("format") == "reddit_engagement" else collect_rss
+            jobs.append((source["name"], collector, source))
     for name, collector, source in jobs:
         try:
             items.extend(collector(source, now))
