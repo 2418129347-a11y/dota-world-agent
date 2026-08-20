@@ -36,6 +36,7 @@ Use the repository workflow at `.github/workflows/daily-digest.yml`. Keep `ENABL
 - Do not bypass paywalls, authentication, robots controls, or anti-bot systems.
 - Do not reproduce full articles; use short paraphrases and original links.
 - Do not mark a transfer, ban, match-fixing allegation, or disciplinary claim as confirmed without an official source or two independent credible sources.
+- An allowlisted link to a team or tournament organizer's official account may confirm the disciplinary action itself. Report the confirmed sanction and its competition impact, but do not import surrounding forum claims about specific fixed matches, betting amounts, networks, or additional people unless those details independently meet the same verification rule.
 - Do not let a failed enrichment source suppress available official news.
 - Do not put tokens, addresses, or credentials in the repository, generated reports, or logs.
 - Do not send twice intentionally; preserve the per-day delivery idempotency key.

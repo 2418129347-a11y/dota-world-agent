@@ -9,7 +9,7 @@
 
 ## Verification
 
-Prefer the highest-tier source when multiple items describe the same event. Keep the other source names as corroboration metadata. Treat disciplinary action, match fixing, and personal allegations as sensitive: require an official statement or at least two independent credible sources. Otherwise exclude the item from the email.
+Prefer the highest-tier source when multiple items describe the same event. Keep the other source names as corroboration metadata. Treat disciplinary action, match fixing, and personal allegations as sensitive: require an official statement or at least two independent credible sources. An allowlisted direct link to a team or organizer account confirms only the sanction and wording visible in that announcement; it does not validate adjacent community claims. Otherwise exclude the item from the email.
 
 ## Circle-news ranking
 
@@ -27,5 +27,5 @@ Only the six interests listed in `editorial-policy.json` are eligible. Rank elig
 
 - Steam `ISteamNews/GetNewsForApp/v2` for AppID 570: core official source.
 - OpenDota `proMatches` and match details: professional series grouping, player/hero statistics, and data-backed commentary. Team/player coverage is bounded by the public list plus the configurable watchlists.
-- A bounded two-day r/DotA2 index plus Reddit public embed metadata: discover China-related posts, read the live upvote display, and count indexed comments up to the configured cap. This is a community signal, never authoritative by itself. The index has no uptime guarantee; if discovery or either engagement lookup fails, omit the rumor rather than guessing.
+- A bounded two-day r/DotA2 index plus Reddit public embed metadata: discover China-related posts, read the live upvote display, and count indexed comments up to the configured cap. This is a community signal, never authoritative by itself. High-engagement posts that link directly to explicitly allowlisted team or organizer accounts may be retained as official-reference discoveries; only the official action is confirmed. The index has no uptime guarantee; if discovery or either engagement lookup fails, omit the item rather than guessing.
 - Google News Dota 2 RSS: discovery only, restricted to the publisher allowlist; display and score the underlying publisher rather than Google News.

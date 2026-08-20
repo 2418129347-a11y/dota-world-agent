@@ -65,6 +65,8 @@ def _alias_in_text(alias: str, text: str) -> bool:
 
 def _sensitive_term_in_text(term: str, text: str) -> bool:
     normalized = term.casefold()
+    if normalized == "ban":
+        return re.search(r"(?<![a-z0-9_])ban(?:s|ned|ning)?(?![a-z0-9_])", text.casefold()) is not None
     if re.fullmatch(r"[a-z0-9_-]+", normalized):
         return _alias_in_text(normalized, text)
     return normalized in text.casefold()
@@ -154,8 +156,11 @@ def circle_category(item: NewsItem, policy: dict[str, Any]) -> str:
         "roster", "lineup", "transfer", "signs", "joins", "leaves", "disband",
         "rumor", "rumour", "shuffle", "leak", "阵容", "转会", "解散", "传闻", "爆料",
     ))
-    player = any(_alias_in_text(word, text) for word in ("retire", "comeback", "interview", "ban", "penalty")) or any(
-        word in text for word in ("退役", "复出", "采访", "禁赛")
+    player = any(_alias_in_text(word, text) for word in (
+        "retire", "comeback", "interview", "ban", "banned", "suspend", "suspended",
+        "penalty", "disqualified", "disqualification", "integrity",
+    )) or any(
+        word in text for word in ("退役", "复出", "采访", "禁赛", "停赛", "取消资格", "赛事诚信", "竞技诚信")
     )
     event = any(word in text for word in ("the international", " ti ", "ti202", "major", "esl one", "dreamleague"))
     offstage = any(word in text for word in ("venue", "prize pool", "schedule", "format", "rules", "invite", "ticket", "visa", "broadcast", "viewership", "场馆", "奖金", "赛程", "赛制", "规则", "直邀", "签证", "转播", "收视"))

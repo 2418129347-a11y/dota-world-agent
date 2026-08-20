@@ -69,6 +69,22 @@ def enforce_rumor_labels(items: list[NewsItem]) -> list[NewsItem]:
     return items
 
 
+def enforce_verification_labels(items: list[NewsItem]) -> list[NewsItem]:
+    for item in items:
+        if item.metadata.get("verification_status") != "official_action_confirmed":
+            continue
+        title = item.title_zh or item.title
+        if not title.startswith("官方纪律公告："):
+            item.title_zh = f"官方纪律公告：{title}"
+        summary = item.summary_zh or item.summary or item.title
+        verification_note = "处罚事实已有官方出处；具体违规过程、涉案金额和相关人员，只采用原公告明确披露的部分，社区推测不计入事实摘要。"
+        if "社区推测不计入事实摘要" not in summary:
+            summary = summary.rstrip("。") + "；" + verification_note
+        item.summary_zh = compact(summary, 360)
+        item.why_it_matters = "正式纪律处罚会直接影响参赛资格、阵容安排和赛事竞争格局。"
+    return items
+
+
 def _extract_output_text(payload: dict[str, Any]) -> str:
     if isinstance(payload.get("output_text"), str):
         return payload["output_text"]
@@ -159,12 +175,12 @@ def summarize(items: list[NewsItem], mode: str = "auto") -> tuple[list[NewsItem]
     if not items:
         return items, "none", warnings
     if mode == "fallback":
-        return enforce_rumor_labels(apply_fallback(items)), "fallback", warnings
+        return enforce_verification_labels(enforce_rumor_labels(apply_fallback(items))), "fallback", warnings
     if mode == "openai" or (mode == "auto" and os.environ.get("OPENAI_API_KEY")):
         try:
-            return enforce_rumor_labels(apply_openai(items)), "openai", warnings
+            return enforce_verification_labels(enforce_rumor_labels(apply_openai(items))), "openai", warnings
         except Exception as exc:
             if mode == "openai":
                 raise
             warnings.append(f"OpenAI 摘要失败，已降级：{type(exc).__name__}: {exc}")
-    return enforce_rumor_labels(apply_fallback(items)), "fallback", warnings
+    return enforce_verification_labels(enforce_rumor_labels(apply_fallback(items))), "fallback", warnings

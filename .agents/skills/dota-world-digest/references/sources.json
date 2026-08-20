@@ -33,7 +33,31 @@
       ],
       "topic_keywords": [
         "rumor", "rumour", "roster", "lineup", "transfer", "sign", "join", "replace",
-        "kick", "leak", "shuffle", "阵容", "转会", "加盟", "爆料"
+        "kick", "leak", "shuffle", "ban", "banned", "suspend", "disqualif", "integrity",
+        "matchfix", "match-fix", "322", "阵容", "转会", "加盟", "爆料", "禁赛", "停赛", "假赛"
+      ],
+      "official_references": [
+        {
+          "id": "lgd_weibo",
+          "domain": "weibo.com",
+          "path_prefix": "/2157471171/",
+          "name": "LGD电子竞技俱乐部",
+          "trust": 95
+        },
+        {
+          "id": "pgl_official",
+          "domain": "pglesports.com",
+          "path_prefix": "/",
+          "name": "PGL",
+          "trust": 95
+        },
+        {
+          "id": "pgl_x",
+          "domain": "x.com",
+          "path_prefix": "/pglesports/",
+          "name": "PGL",
+          "trust": 95
+        }
       ],
       "engagement": {
         "min_score": 400,

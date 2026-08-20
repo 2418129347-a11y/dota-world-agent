@@ -22,7 +22,7 @@ from dota_news.models import NewsItem
 from dota_news.pipeline import deduplicate, select_items, similarity
 from dota_news.editorial import apply_editorial_priority, apply_external_match_impacts, china_relation, circle_category, compose_digest, enrich_match_reports, merge_match_series
 from dota_news.render import render_html
-from dota_news.summarizers import apply_fallback, enforce_rumor_labels
+from dota_news.summarizers import apply_fallback, enforce_rumor_labels, summarize
 from dota_news.utils import canonical_url, clean_text
 
 
@@ -212,6 +212,47 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual([news.item_id for news in result], ["t3_hot"])
         self.assertEqual(result[0].metadata["engagement"]["comments"], 60)
 
+    def test_high_heat_allowlisted_official_disciplinary_link_is_selected(self) -> None:
+        payload = {"data": [{
+            "id": "tailung",
+            "title": "TaiLung is banned from The International 2026 and all future PGL events",
+            "selftext": "LGD announcement plus unverified community allegations about a 322 mafia and betting losses.",
+            "created_utc": NOW.timestamp(),
+            "url": "https://weibo.com/2157471171/RcAAEl9fF",
+        }]}
+        source = {
+            "id": "reddit", "name": "r/DotA2 社区", "url": "https://example.com/posts.json",
+            "tier": "community", "trust": 42,
+            "interest_keywords": ["lgd"],
+            "topic_keywords": ["ban", "322"],
+            "official_references": [{
+                "id": "lgd_weibo", "domain": "weibo.com", "path_prefix": "/2157471171/",
+                "name": "LGD电子竞技俱乐部", "trust": 95,
+            }],
+            "engagement": {"min_score": 400, "min_comments": 60, "comment_cap": 100},
+        }
+        embed = b'<faceplate-number number="1668" pretty></faceplate-number> upvotes'
+        comments = {"data": [{"id": str(index)} for index in range(100)]}
+        with (
+            patch("dota_news.collectors._request", return_value=embed),
+            patch("dota_news.collectors.fetch_json", side_effect=[payload, comments]),
+        ):
+            result = collect_reddit(source, NOW)
+        self.assertEqual(len(result), 1)
+        news = result[0]
+        self.assertEqual(news.source_tier, "official")
+        self.assertEqual(news.source_name, "LGD电子竞技俱乐部")
+        self.assertEqual(news.url, "https://weibo.com/2157471171/RcAAEl9fF")
+        self.assertNotIn("322 mafia", news.summary)
+        apply_editorial_priority([news], POLICY, NOW)
+        self.assertEqual(compose_digest([news], POLICY), [news])
+        summarized, _, _ = summarize([news], "fallback")
+        self.assertIn("官方纪律公告", summarized[0].title_zh)
+        self.assertIn("社区推测不计入事实摘要", summarized[0].summary_zh)
+        template = ROOT / ".agents" / "skills" / "dota-world-digest" / "assets" / "digest.html"
+        _, rendered = render_html(summarized, template, NOW, [])
+        self.assertIn("纪律处罚已有官方出处", rendered)
+
     def test_high_engagement_china_roster_rumor_is_labeled_and_selected(self) -> None:
         rumor = item("rumor", "Lgd Topson for 1 more season?", trust=42, tier="community")
         rumor.summary = "Maybe the rumours of Ame, Topson, Ws, Xinq and Sneyking is real?"
@@ -254,6 +295,14 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(compose_digest([rumor], POLICY), [])
         rumor.corroborating_sources = ["Media A", "Media B"]
         self.assertEqual(compose_digest([rumor], POLICY), [rumor])
+
+    def test_high_heat_322_investigation_stays_out_without_confirmation(self) -> None:
+        rumor = item("322", "Tailung's 322 investigation and why he was banned", trust=42, tier="community")
+        rumor.summary = "The post alleges a match-fixing scheme involving LGD and several players."
+        rumor.metadata = {"kind": "forum_post", "engagement": {"score": 865, "comments": 100}}
+        apply_editorial_priority([rumor], POLICY, NOW)
+        self.assertTrue(rumor.metadata["community_rumor"])
+        self.assertEqual(compose_digest([rumor], POLICY), [])
 
     def test_disband_does_not_trigger_ban_sensitive_term(self) -> None:
         disband = item("disband", "Vici Gaming disband roster", trust=70)

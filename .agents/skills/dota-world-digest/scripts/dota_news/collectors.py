@@ -8,7 +8,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 from .models import NewsItem
 from .utils import clean_text, parse_datetime, stable_id
@@ -136,6 +136,20 @@ def collect_rss(source: dict[str, Any], now: datetime) -> list[NewsItem]:
     return items
 
 
+def _official_reference(url: str, source: dict[str, Any]) -> dict[str, Any] | None:
+    if not url:
+        return None
+    parsed = urlsplit(url)
+    domain = parsed.netloc.casefold().removeprefix("www.")
+    path = parsed.path.casefold()
+    for reference in source.get("official_references", []):
+        expected_domain = str(reference.get("domain") or "").casefold().removeprefix("www.")
+        expected_path = str(reference.get("path_prefix") or "/").casefold()
+        if domain == expected_domain and path.startswith(expected_path):
+            return reference
+    return None
+
+
 def collect_reddit(source: dict[str, Any], now: datetime) -> list[NewsItem]:
     payload = fetch_json_retry(source["url"], timeout=30)
     thresholds = source.get("engagement", {})
@@ -152,6 +166,8 @@ def collect_reddit(source: dict[str, Any], now: datetime) -> list[NewsItem]:
         post_id = clean_text(raw.get("id"), 30)
         title = clean_text(raw.get("title"), 300)
         summary = clean_text(raw.get("selftext"), 1200)
+        external_url = str(raw.get("url") or "")
+        official_reference = _official_reference(external_url, source)
         if not post_id or not title:
             continue
         text = f"{title} {summary}".casefold()
@@ -162,17 +178,29 @@ def collect_reddit(source: dict[str, Any], now: datetime) -> list[NewsItem]:
             for keyword in keywords
         ):
             continue
-        if topic_keywords and not any(keyword in text for keyword in topic_keywords):
+        if topic_keywords and not any(keyword in text for keyword in topic_keywords) and not official_reference:
             continue
         candidate_count += 1
         if candidate_count > candidate_limit:
             break
-        url = f"https://www.reddit.com/r/DotA2/comments/{post_id}/"
-        item = NewsItem(
-            f"t3_{post_id}", title, url, parse_datetime(raw.get("created_utc"), now),
-            source["id"], source["name"], source["tier"], int(source["trust"]),
-            summary, "community",
-        )
+        if official_reference:
+            source_name = clean_text(official_reference.get("name"), 100) or "官方公告"
+            official_summary = (
+                f"这是经 {source['name']} 发现的 {source_name} 官方公告链接。"
+                "处罚或纪律事实以原公告为准；社区评论及后续调查帖中的额外指控不视为已确认事实。"
+            )
+            item = NewsItem(
+                f"official-ref-{post_id}", title, external_url, parse_datetime(raw.get("created_utc"), now),
+                str(official_reference.get("id") or f"official:{source_name}"), source_name, "official",
+                int(official_reference.get("trust", 95)), official_summary, "community",
+            )
+        else:
+            url = f"https://www.reddit.com/r/DotA2/comments/{post_id}/"
+            item = NewsItem(
+                f"t3_{post_id}", title, url, parse_datetime(raw.get("created_utc"), now),
+                source["id"], source["name"], source["tier"], int(source["trust"]),
+                summary, "community",
+            )
         try:
             embed_url = f"https://embed.reddit.com/r/DotA2/comments/{post_id}/"
             embed_html = _request(embed_url, timeout=10).decode("utf-8", errors="replace")
@@ -192,13 +220,18 @@ def collect_reddit(source: dict[str, Any], now: datetime) -> list[NewsItem]:
         if comments < min_comments:
             continue
         item.metadata = {
-            "kind": "forum_post",
+            "kind": "official_reference" if official_reference else "forum_post",
             "engagement": {
                 "score": score,
                 "comments": comments,
                 "comments_capped": comments >= comment_cap,
             },
         }
+        if official_reference:
+            item.metadata.update({
+                "discovered_via": source["name"],
+                "verification_status": "official_action_confirmed",
+            })
         items.append(item)
     return items
 
