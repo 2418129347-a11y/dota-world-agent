@@ -22,6 +22,7 @@ from dota_news.models import NewsItem
 from dota_news.pipeline import deduplicate, select_items, similarity
 from dota_news.editorial import apply_editorial_priority, apply_external_match_impacts, china_relation, circle_category, compose_digest, enrich_match_reports, merge_match_series
 from dota_news.render import render_html
+from dota_news.schedule import apply_verified_schedule_context, build_tier1_reminders
 from dota_news.summarizers import apply_fallback, enforce_rumor_labels, summarize
 from dota_news.utils import canonical_url, clean_text
 
@@ -348,14 +349,62 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(news.spotlights[1]["player"], "Whisper")
         self.assertIn("三号位风行者", news.editorial_note)
 
-    def test_media_evidence_adds_elimination_impact_to_match(self) -> None:
+    def test_media_prose_cannot_add_elimination_impact_to_match(self) -> None:
         news = match_item("impact", "Team Yandex", "LGD Gaming")
         news.metadata.update({"league": "The International 2026", "winner": "Team Yandex", "loser": "LGD Gaming"})
         evidence = item("evidence", "Team Yandex defeat LGD Gaming to become the final team qualified for The International 2026 Playoffs", trust=70)
         evidence.source_name = "GosuGamers"
         apply_external_match_impacts([news], [evidence])
-        self.assertIn("LGD Gaming 未能晋级", news.impact)
-        self.assertEqual(news.corroborating_sources, ["GosuGamers"])
+        self.assertEqual(news.impact, "")
+        self.assertTrue(news.metadata["impact_claim_withheld"])
+        self.assertEqual(news.corroborating_sources, [])
+
+    def test_upper_bracket_snapshot_says_loser_is_not_eliminated(self) -> None:
+        news = match_item("spirit", "TEAM VISION", "Team Spirit")
+        news.published_at = datetime(2026, 8, 21, 12, 34, tzinfo=timezone.utc)
+        news.metadata.update({
+            "league": "The International 2026", "winner": "TEAM VISION", "loser": "Team Spirit",
+        })
+        calendar = json.loads((ROOT / ".agents" / "skills" / "dota-world-digest" / "references" / "tier1-events.json").read_text(encoding="utf-8"))
+        apply_verified_schedule_context([news], calendar)
+        self.assertIn("Team Spirit 落入败者组，尚未出局", news.impact)
+        self.assertFalse(news.metadata["loser_out"])
+        self.assertEqual(news.metadata["schedule_stage"], "胜者组半决赛")
+        self.assertEqual(len(news.corroborating_sources), 2)
+
+    def test_elimination_requires_exact_verified_stage_snapshot(self) -> None:
+        news = match_item("lower", "Team Spirit", "Opponent")
+        news.published_at = datetime(2026, 8, 22, 12, 0, tzinfo=timezone.utc)
+        news.metadata.update({"league": "Tier One Cup", "winner": "Team Spirit", "loser": "Opponent"})
+        calendar = {
+            "events": [{"id": "cup", "name": "Tier One Cup"}],
+            "series": [{
+                "event_id": "cup", "team_a": "Team Spirit", "team_b": "Opponent",
+                "scheduled_at": "2026-08-22T18:00:00+08:00", "stage_zh": "败者组第一轮",
+                "stage": "lower_bracket_round_1", "loser_out": True, "winner_destination": "败者组第二轮",
+                "verified_at": "2026-08-22", "sources": [{"name": "官方赛程"}, {"name": "赛事数据页"}],
+            }],
+        }
+        apply_verified_schedule_context([news], calendar)
+        self.assertIn("Opponent 在该淘汰轮失利后结束本届赛事征程", news.impact)
+
+    def test_tier1_reminder_is_created_one_day_before_event(self) -> None:
+        calendar = {
+            "reminder_days_before": 1,
+            "events": [{
+                "id": "cup", "name": "Tier One Cup", "tier": 1, "starts_on": "2026-08-18",
+                "ends_on": "2026-08-20", "reminder": True,
+                "verified_at": "2026-08-17",
+                "sources": [{"name": "赛事官网", "url": "https://example.com/cup"}],
+            }],
+        }
+        reminders = build_tier1_reminders(calendar, NOW, set())
+        self.assertEqual(len(reminders), 1)
+        self.assertEqual(reminders[0].priority_group, "tier1_schedule")
+        template = ROOT / ".agents" / "skills" / "dota-world-digest" / "assets" / "digest.html"
+        subject, rendered = render_html(reminders, template, NOW, [])
+        self.assertIn("含赛程提醒", subject)
+        self.assertIn("Tier 1 赛程提醒", rendered)
 
     def test_fallback_writes_natural_chinese_disband_copy(self) -> None:
         news = item("vg", "Vici Gaming disband immediately after getting eliminated from The International 2026", trust=70)

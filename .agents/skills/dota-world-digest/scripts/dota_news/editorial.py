@@ -271,26 +271,25 @@ def compose_digest(items: list[NewsItem], policy: dict[str, Any]) -> list[NewsIt
 
 
 def apply_external_match_impacts(items: list[NewsItem], evidence_items: list[NewsItem]) -> None:
+    """Flag unsupported impact language, but never derive bracket outcomes from prose.
+
+    A news article can mention several matches and several eliminated teams. Team-name
+    and keyword co-occurrence is therefore not evidence that this specific series was
+    an elimination match. Advancement and elimination copy is applied only by the
+    verified schedule snapshot in ``schedule.apply_verified_schedule_context``.
+    """
     media = [item for item in evidence_items if item.source_tier in {"official", "media"} and item.trust >= 65]
     for item in items:
         if item.metadata.get("kind") != "match":
             continue
         winner = str(item.metadata.get("winner") or "")
         loser = str(item.metadata.get("loser") or "")
-        league = str(item.metadata.get("league") or "本项赛事")
         for evidence in media:
             text = f"{evidence.title} {evidence.summary}".casefold()
             if winner.casefold() not in text and loser.casefold() not in text:
                 continue
-            if winner.casefold() in text and "final team qualified" in text:
-                item.impact = f"{winner} 获得最后一个季后赛席位；{loser} 未能晋级，{league} 征程就此结束。"
-            elif loser.casefold() in text and any(term in text for term in ("eliminated", "elimination", "淘汰", "出局")):
-                item.impact = f"{loser} 在本轮失利后从 {league} 出局。"
-            else:
-                continue
-            if evidence.source_name not in item.corroborating_sources:
-                item.corroborating_sources.append(evidence.source_name)
-            break
+            if any(term in text for term in ("qualified", "eliminated", "elimination", "晋级", "淘汰", "出局")):
+                item.metadata["impact_claim_withheld"] = True
 
 
 def _role(player: dict[str, Any], team_players: list[dict[str, Any]]) -> str:

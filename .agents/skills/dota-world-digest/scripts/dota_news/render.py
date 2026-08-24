@@ -12,7 +12,7 @@ from .models import NewsItem
 from .pipeline import section_for, source_label
 
 
-SECTION_ORDER = ["中国 Dota 赛场", "全球焦点赛事", "圈内消息", "传奇选手动态", "官方与版本", "数据洞察"]
+SECTION_ORDER = ["Tier 1 赛程提醒", "中国 Dota 赛场", "全球焦点赛事", "圈内消息", "传奇选手动态", "官方与版本", "数据洞察"]
 DISPLAY_TZ = ZoneInfo(os.environ.get("DIGEST_TIMEZONE", "Asia/Shanghai"))
 
 
@@ -20,7 +20,8 @@ def subject_for(items: list[NewsItem], date_label: str) -> str:
     lead = (items[0].title_zh or items[0].title) if items else "今日暂无重要更新"
     if len(lead) > 34:
         lead = lead[:33] + "…"
-    return f"【刀塔世界日报】{lead}｜{date_label}"
+    label = "刀塔世界日报·含赛程提醒" if any(item.metadata.get("kind") == "tier1_reminder" for item in items) else "刀塔世界日报"
+    return f"【{label}】{lead}｜{date_label}"
 
 
 def _item_html(item: NewsItem, index: int) -> str:
@@ -39,6 +40,9 @@ def _item_html(item: NewsItem, index: int) -> str:
     verification_html = ""
     if item.metadata.get("verification_status") == "official_action_confirmed":
         verification_html = '<div class="corroboration">核验状态：纪律处罚已有官方出处 · 具体违规过程以原公告为准</div>'
+    elif item.metadata.get("verification_status") == "schedule_stage_confirmed":
+        stage = html.escape(str(item.metadata.get("schedule_stage") or "赛程阶段"))
+        verification_html = f'<div class="corroboration">核验状态：比赛结果与{stage}赛程快照已匹配</div>'
     notes = []
     if item.impact:
         notes.append(f'<div class="impact"><strong>赛事影响</strong><span>{html.escape(item.impact)}</span></div>')
@@ -96,11 +100,16 @@ def render_html(items: list[NewsItem], template_path: Path, generated_at: dateti
     if warnings:
         warning_html = '<div class="warnings"><strong>来源状态：</strong>' + html.escape("；".join(warnings)) + "</div>"
     template = Template(template_path.read_text(encoding="utf-8"))
+    reminder_count = sum(item.metadata.get("kind") == "tier1_reminder" for item in items)
+    subtitle = f"中国 Dota 全量追踪 · 全球焦点精选 · 今日收录 {len(items)} 条"
+    if reminder_count:
+        subtitle += f" · Tier 1 赛程提醒 {reminder_count} 条"
     rendered = template.safe_substitute(
         subject=html.escape(subject),
         date_label=html.escape(date_label),
         generated_time=html.escape(generated_at.astimezone(DISPLAY_TZ).strftime("%Y-%m-%d %H:%M %Z")),
         item_count=str(len(items)),
+        subtitle=html.escape(subtitle),
         item_blocks="".join(blocks),
         warning_block=warning_html,
     )
@@ -125,6 +134,8 @@ def render_text(items: list[NewsItem], generated_at: datetime, warnings: list[st
         verification_line = ""
         if item.metadata.get("verification_status") == "official_action_confirmed":
             verification_line = "   核验状态：纪律处罚已有官方出处；具体违规过程以原公告为准"
+        elif item.metadata.get("verification_status") == "schedule_stage_confirmed":
+            verification_line = f"   核验状态：比赛结果与{item.metadata.get('schedule_stage') or '赛程阶段'}快照已匹配"
         spotlight_lines = [
             f"   {spotlight.get('label', '本场最佳')}：{spotlight.get('player')}｜{spotlight.get('team')}｜{spotlight.get('role')}｜{spotlight.get('hero')}｜KDA {spotlight.get('kda')}"
             for spotlight in item.spotlights

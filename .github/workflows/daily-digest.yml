@@ -8,9 +8,10 @@ on:
         required: false
         type: string
   schedule:
-    # 00:23/00:38/00:53 UTC = 08:23/08:38/08:53 Asia/Shanghai.
-    # Backup triggers are guarded by the per-day delivery state below.
-    - cron: "23,38,53 0 * * *"
+    # GitHub scheduled runs may arrive hours late. These heartbeats cover the
+    # nominal 08:00 window and the preceding three UTC hours; the gate below
+    # only allows actual Asia/Shanghai 08:00-08:59 runs to build or send mail.
+    - cron: "7,22,37,52 0-1,21-23 * * *"
 
 permissions:
   contents: read
@@ -20,7 +21,31 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  time_gate:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.clock.outputs.should_run }}
+      local_time: ${{ steps.clock.outputs.local_time }}
+    steps:
+      - name: Check actual Beijing delivery window
+        id: clock
+        shell: bash
+        run: |
+          local_time="$(TZ=Asia/Shanghai date +%Y-%m-%dT%H:%M:%S%z)"
+          hour="$(TZ=Asia/Shanghai date +%H)"
+          minute="$(TZ=Asia/Shanghai date +%M)"
+          minute_of_day=$((10#$hour * 60 + 10#$minute))
+          should_run=false
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] || (( minute_of_day >= 480 && minute_of_day < 540 )); then
+            should_run=true
+          fi
+          echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
+          echo "local_time=$local_time" >> "$GITHUB_OUTPUT"
+          echo "Asia/Shanghai now: $local_time; should run: $should_run"
+
   digest:
+    needs: time_gate
+    if: needs.time_gate.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

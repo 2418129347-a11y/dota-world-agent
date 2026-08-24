@@ -11,6 +11,8 @@
 
 Prefer the highest-tier source when multiple items describe the same event. Keep the other source names as corroboration metadata. Treat disciplinary action, match fixing, and personal allegations as sensitive: require an official statement or at least two independent credible sources. An allowlisted direct link to a team or organizer account confirms only the sanction and wording visible in that announcement; it does not validate adjacent community claims. Otherwise exclude the item from the email.
 
+Tier 1 reminders require a dated calendar entry with at least one organizer or official event source and a `verified_at` date. Advancement, lower-bracket, and elimination claims require an exact series snapshot with tournament, both teams, scheduled date, bracket stage, `loser_out`, `verified_at`, and at least two schedule sources. Article prose cannot substitute for the stage snapshot.
+
 ## Circle-news ranking
 
 Only the six interests listed in `editorial-policy.json` are eligible. Rank eligible items using credibility 30%, China relevance 25%, impact 20%, recency 10%, personal-interest match 10%, and heat/corroboration 5%. Normally require source trust of at least 65 and publish at most two. A community rumor may use the configured 48-hour window and bypass the normal trust/score floor only when it directly concerns a configured Chinese club or tracked player and simultaneously meets the configured upvote and comment thresholds. Publish at most one such rumor, show its engagement counts, and label it as unconfirmed. Quality wins over filling the quota.
