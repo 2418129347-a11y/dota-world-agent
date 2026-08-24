@@ -127,6 +127,8 @@ def select_items(
 
 
 def section_for(item: NewsItem) -> str:
+    if item.priority_group == "tier1_schedule":
+        return "Tier 1 赛程提醒"
     if item.priority_group == "china_match":
         return "中国 Dota 赛场"
     if item.priority_group == "global_match":
@@ -141,6 +143,8 @@ def section_for(item: NewsItem) -> str:
 
 
 def source_label(item: NewsItem) -> str:
+    if item.metadata.get("kind") == "tier1_reminder":
+        return "赛程核验"
     if item.metadata.get("community_rumor"):
         return "社区传闻"
     labels = {"official": "官方", "data": "数据源", "media": "媒体", "community": "社区"}

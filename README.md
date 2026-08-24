@@ -98,7 +98,7 @@ python .agents/skills/dota-world-digest/scripts/dota_digest.py \
    - Secrets：`SMTP_USERNAME`、`SMTP_PASSWORD`、`DIGEST_TO`
    - Variable：`ENABLE_SEND=true`
 3. 打开 Actions，并手动运行一次 `Daily Dota World Digest` 验证配置。
-4. 默认工作流在北京时间 08:23 首次运行，并在 08:38、08:53 备用重试；成功发送后，当天其余触发会自动跳过，不会重复投递。GitHub 云端排队仍可能造成延迟。
+4. 默认工作流使用 15 分钟心跳覆盖 GitHub 可能出现的排队延迟，但只有任务实际进入北京时间 08:00–08:59 窗口才会生成和发送邮件；成功发送后，当天其余触发自动跳过。
 
 指定日期补发：在 GitHub Actions 手动运行页面填写 `date`，格式为 `YYYY-MM-DD`。详细步骤见 [部署指南](docs/DEPLOYMENT.md)。
 
@@ -106,6 +106,7 @@ python .agents/skills/dota-world-digest/scripts/dota_digest.py \
 
 - Steam / Dota 2 官方新闻：官方公告与版本更新。
 - OpenDota：职业赛果和公开比赛数据。
+- Tier 1 赛程快照：开赛前一天加入提醒；只有赛事、双方、日期和淘汰阶段全部匹配，才写入晋级或出局结论。
 - RSS 与媒体白名单：新闻发现；邮件显示原始出版方，而不是聚合器名称。
 - Reddit：在最近 48 小时内，只收录同时达到 400 赞同和 60 条评论的中国相关阵容/选手传闻；每天最多一条，且不能单独证明任何事实或敏感指控。帖子若直接链接到白名单内的俱乐部或赛事方官方账号，可作为官方公告的发现入口；邮件只确认公告明确给出的处罚。
 
@@ -116,6 +117,12 @@ python .agents/skills/dota-world-digest/scripts/dota_digest.py \
 ```
 
 信息源和信任分层见 [来源政策](.agents/skills/dota-world-digest/references/source-policy.md)。旅外选手转队后需要更新追踪名单；公开比赛列表本身无法始终可靠地判断选手国籍。
+
+Tier 1 日期、官方链接和已核验的淘汰赛阶段位于：
+
+```text
+.agents/skills/dota-world-digest/references/tier1-events.json
+```
 
 ## 安全与隐私
 
@@ -131,7 +138,7 @@ python .agents/skills/dota-world-digest/scripts/dota_digest.py \
 - 选手位置根据线路和经济数据推断，不等同于战队官方分工。
 - “本报 MVP”是本项目的数据化评选，不是赛事官方奖项。
 - 当天高可信圈内消息不足两条时会少发，不使用低质量内容填充。
-- GitHub Actions 的定时触发不提供严格准点保证；项目使用三次触发和按日防重复状态降低延迟与漏发概率。
+- GitHub Actions 的定时触发不提供严格准点保证；项目使用跨时段心跳、北京时间窗口闸门和按日防重复状态，把投递限制在 08:00–08:59。若该窗口内 GitHub 没有创建任何运行，当天仍可能漏发。
 - 本项目不提供投注、投资或博彩建议。
 
 ## 参与贡献

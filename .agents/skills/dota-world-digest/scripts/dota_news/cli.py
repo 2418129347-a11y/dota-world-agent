@@ -13,6 +13,7 @@ from .mailer import send_email
 from .models import NewsItem
 from .pipeline import select_items
 from .render import render_html, render_text
+from .schedule import apply_verified_schedule_context, build_tier1_reminders
 from .summarizers import summarize
 from .utils import canonical_url
 
@@ -96,6 +97,7 @@ def run(argv: list[str] | None = None) -> int:
     config = _load_json(args.config)
     policy_path = SKILL_ROOT / "references" / "editorial-policy.json"
     editorial_policy = _load_json(policy_path)
+    tier1_calendar = _load_json(SKILL_ROOT / "references" / "tier1-events.json")
     ranking = dict(config.get("ranking", {}))
     if args.hours is not None:
         ranking["hours"] = args.hours
@@ -117,11 +119,13 @@ def run(argv: list[str] | None = None) -> int:
     sent_dates = set(state.get("sent_dates", []))
     selected = select_items(collected, ranking, seen, now, editorial_policy)
     selected = compose_digest(selected, editorial_policy)
+    apply_verified_schedule_context(selected, tier1_calendar)
     apply_external_match_impacts(selected, collected)
     if not args.fixture:
         warnings.extend(enrich_match_reports(selected))
     selected, summarizer_mode, summary_warnings = summarize(selected, args.summarizer)
     warnings.extend(summary_warnings)
+    selected.extend(build_tier1_reminders(tier1_calendar, now, seen))
     args.output_dir.mkdir(parents=True, exist_ok=True)
     stamp = now.astimezone(DISPLAY_TZ).strftime("%Y-%m-%d")
     html_path = args.output_dir / f"dota-world-digest-{stamp}.html"
