@@ -29,7 +29,7 @@ Read `references/output-contract.md` before changing the email layout or summary
 
 ## Scheduling
 
-Use the repository workflow at `.github/workflows/daily-digest.yml`. Keep `ENABLE_SEND` unset or false during shadow runs. Store credentials only in GitHub Actions secrets. Preserve the heartbeat triggers, the actual Asia/Shanghai 08:00-08:59 time gate, and the per-day delivery guard so delayed runs cannot send late or duplicate mail. Maintain verified Tier 1 dates and stage snapshots in `references/tier1-events.json`; reminders appear one day before configured events.
+Use the repository workflow at `.github/workflows/daily-digest.yml`. Keep `ENABLE_SEND` unset or false during shadow runs. Store credentials only in GitHub Actions secrets. Preserve the heartbeat triggers, the early-run wait until 08:00 Asia/Shanghai, the 09:30 late cutoff, and the per-day delivery guard so delayed runs cannot send at 11:00 or send duplicates. Maintain verified Tier 1 dates and stage snapshots in `references/tier1-events.json`; reminders appear one day before configured events.
 
 ## Hard boundaries
 
