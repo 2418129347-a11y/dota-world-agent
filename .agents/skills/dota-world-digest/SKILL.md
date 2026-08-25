@@ -25,11 +25,11 @@ Produce a source-linked Chinese briefing from bounded, untrusted news inputs. Pr
 
 ## Output contract
 
-Read `references/output-contract.md` before changing the email layout or summary schema. Generate both HTML and plain text. Include all detected professional matches involving a configured Chinese club or tracked Chinese player, then add only the strongest global matches. Select at most two eligible circle-news items; never add weak items merely to fill the quota. Allow at most one high-engagement community rumor about a Chinese club or tracked player, and never present it as confirmed.
+Read `references/output-contract.md` before changing the email layout or summary schema. Generate both HTML and plain text. Order editorial content as: Chinese matches and Chinese roster/player news first, Tier 1 player movement second, verified upcoming fixtures third, then only Tier 1 global match reports and the remaining high-value categories. Treat post-TI transfers, departures, retirements, disbands, and rebuilds involving configured elite teams or players as Tier 1 intelligence. Exclude generic schedule/results indexes, static team-statistics pages, and non-Tier-1 global matches. Never add weak items merely to fill a quota, and never present a rumor as confirmed.
 
 ## Scheduling
 
-Use the repository workflow at `.github/workflows/daily-digest.yml`. Keep `ENABLE_SEND` unset or false during shadow runs. Store credentials only in GitHub Actions secrets. Preserve the heartbeat triggers, the early-run wait until 08:00 Asia/Shanghai, the 09:30 late cutoff, and the per-day delivery guard so delayed runs cannot send at 11:00 or send duplicates. Maintain verified Tier 1 dates and stage snapshots in `references/tier1-events.json`; reminders appear one day before configured events.
+Use the repository workflow at `.github/workflows/daily-digest.yml`. Keep `ENABLE_SEND` unset or false during shadow runs. Store credentials only in GitHub Actions secrets. Preserve the heartbeat triggers, the early-run wait until 08:00 Asia/Shanghai, the 09:30 late cutoff, and the per-day delivery guard so delayed runs cannot send at 11:00 or send duplicates. Maintain verified Tier 1 dates, fixtures, and stage snapshots in `references/tier1-events.json`; the email renders exact Beijing time, teams, stage, BoX, and elimination status when the source has published them, and otherwise shows an explicit pending state instead of guessing.
 
 ## Hard boundaries
 

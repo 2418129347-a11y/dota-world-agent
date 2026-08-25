@@ -1,9 +1,10 @@
 {
   "interest_categories": {
-    "china_roster": 100,
-    "china_player": 95,
+    "china_roster": 120,
+    "china_player": 115,
+    "elite_player_movement": 110,
+    "elite_transfer": 108,
     "top_event_offstage": 90,
-    "elite_transfer": 85,
     "pro_patch": 80,
     "china_ecosystem": 75
   },
@@ -15,18 +16,37 @@
     "interest_match": 10,
     "heat": 5
   },
-  "circle_limit": 2,
+  "china_news_limit": 3,
+  "tier1_player_movement_limit": 4,
+  "circle_limit": 1,
   "circle_trust_floor": 65,
   "community_rumor": {
     "enabled": true,
-    "allowed_categories": ["china_roster", "china_player"],
-    "min_score": 400,
-    "min_comments": 60,
+    "allowed_categories": ["china_roster", "china_player", "elite_transfer", "elite_player_movement"],
+    "min_score": 120,
+    "min_comments": 35,
+    "category_thresholds": {
+      "china_roster": {"min_score": 300, "min_comments": 50},
+      "china_player": {"min_score": 300, "min_comments": 50},
+      "elite_transfer": {"min_score": 120, "min_comments": 35},
+      "elite_player_movement": {"min_score": 120, "min_comments": 35}
+    },
     "max_age_hours": 48,
-    "daily_limit": 1
+    "daily_limit": 4
   },
   "china_match_limit": 8,
   "global_match_limit": 2,
+  "tier1_league_keywords": [
+    "The International", "TI 2026", "PGL Wallachia", "BLAST SLAM", "DreamLeague",
+    "ESL One", "Esports World Cup", "Riyadh Masters"
+  ],
+  "tier1_player_movement_entities": [
+    "Team Falcons", "Falcons", "BetBoom", "BB Team", "Team Spirit", "Team Liquid",
+    "Team Yandex", "PARIVISION", "1Win", "1w Team", "Tundra", "Nigma", "OG",
+    "skiter", "Sneyking", "Cr1t", "Aui_2000", "Aui 2000", "Malr1ne", "ATF",
+    "Ammar", "Collapse", "Yatoro", "Larl", "Nisha", "Topson", "Puppey", "SumaiL",
+    "33", "Pure", "gpk", "Nightfall", "Save", "Miero", "Satanic"
+  ],
   "china_clubs": [
     "LGD Gaming", "PSG.LGD", "Xtreme Gaming", "Team Tidebound", "Azure Ray",
     "Vici Gaming", "Invictus Gaming", "Team Aster", "EHOME"

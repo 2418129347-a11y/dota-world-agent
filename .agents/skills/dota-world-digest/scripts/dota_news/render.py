@@ -12,7 +12,7 @@ from .models import NewsItem
 from .pipeline import section_for, source_label
 
 
-SECTION_ORDER = ["Tier 1 赛程提醒", "中国 Dota 赛场", "全球焦点赛事", "圈内消息", "传奇选手动态", "官方与版本", "数据洞察"]
+SECTION_ORDER = ["中国 Dota 赛场", "中国 Dota 动态", "转会期情报（T1）", "近期赛程", "全球焦点赛事", "圈内消息", "传奇选手动态", "官方与版本", "数据洞察"]
 DISPLAY_TZ = ZoneInfo(os.environ.get("DIGEST_TIMEZONE", "Asia/Shanghai"))
 
 
@@ -43,6 +43,8 @@ def _item_html(item: NewsItem, index: int) -> str:
     elif item.metadata.get("verification_status") == "schedule_stage_confirmed":
         stage = html.escape(str(item.metadata.get("schedule_stage") or "赛程阶段"))
         verification_html = f'<div class="corroboration">核验状态：比赛结果与{stage}赛程快照已匹配</div>'
+    elif item.metadata.get("movement_status"):
+        verification_html = f'<div class="corroboration">动向状态：{html.escape(str(item.metadata["movement_status"]))}</div>'
     notes = []
     if item.impact:
         notes.append(f'<div class="impact"><strong>赛事影响</strong><span>{html.escape(item.impact)}</span></div>')
@@ -78,6 +80,40 @@ def _item_html(item: NewsItem, index: int) -> str:
 </article>""".strip()
 
 
+def _schedule_html(item: NewsItem, index: int) -> str:
+    fixtures = item.metadata.get("fixtures", [])
+    rows = []
+    for fixture in fixtures:
+        scheduled = datetime.fromisoformat(str(fixture["scheduled_at"]).replace("Z", "+00:00")).astimezone(DISPLAY_TZ)
+        elimination = "淘汰局" if fixture.get("loser_out") else "非淘汰局"
+        rows.append(
+            '<div class="fixture-row">'
+            f'<div class="fixture-time">{scheduled.strftime("%m-%d")}<strong>{scheduled.strftime("%H:%M")}</strong></div>'
+            '<div class="fixture-match">'
+            f'<strong>{html.escape(str(fixture.get("team_a") or "待定"))}</strong>'
+            '<span class="versus">VS</span>'
+            f'<strong>{html.escape(str(fixture.get("team_b") or "待定"))}</strong>'
+            f'<small>{html.escape(str(fixture.get("stage_zh") or "阶段待定"))} · {html.escape(str(fixture.get("best_of") or "赛制待定"))} · {elimination}</small>'
+            '</div></div>'
+        )
+    if not rows:
+        rows.append('<div class="schedule-pending">具体对阵尚未由可核验来源公布；不会猜测队伍、开赛时间或淘汰阶段。</div>')
+    corroboration = ""
+    if item.corroborating_sources:
+        corroboration = f'<div class="corroboration">赛程复核：{html.escape("、".join(item.corroborating_sources))}</div>'
+    return f"""
+<article class="schedule-card">
+  <div class="news-index">{index:02d}</div>
+  <div class="news-body">
+    <div class="meta"><span class="tier tier-official">赛程核验</span><span>{html.escape(item.source_name)}</span><span>北京时间</span></div>
+    <h3><a href="{html.escape(item.url, quote=True)}">{html.escape(item.title_zh or item.title)}</a></h3>
+    <p>{html.escape(item.summary_zh or item.summary)}</p>
+    <div class="fixture-board">{''.join(rows)}</div>
+    {corroboration}
+  </div>
+</article>""".strip()
+
+
 def render_html(items: list[NewsItem], template_path: Path, generated_at: datetime, warnings: list[str]) -> tuple[str, str]:
     date_label = generated_at.astimezone(DISPLAY_TZ).strftime("%Y-%m-%d")
     subject = subject_for(items, date_label)
@@ -91,7 +127,7 @@ def render_html(items: list[NewsItem], template_path: Path, generated_at: dateti
             continue
         cards = []
         for item in section_items:
-            cards.append(_item_html(item, index))
+            cards.append(_schedule_html(item, index) if item.metadata.get("kind") == "tier1_reminder" else _item_html(item, index))
             index += 1
         blocks.append(f'<section><h2>{html.escape(section)}</h2>{"".join(cards)}</section>')
     if not blocks:
@@ -136,15 +172,30 @@ def render_text(items: list[NewsItem], generated_at: datetime, warnings: list[st
             verification_line = "   核验状态：纪律处罚已有官方出处；具体违规过程以原公告为准"
         elif item.metadata.get("verification_status") == "schedule_stage_confirmed":
             verification_line = f"   核验状态：比赛结果与{item.metadata.get('schedule_stage') or '赛程阶段'}快照已匹配"
+        elif item.metadata.get("movement_status"):
+            verification_line = f"   动向状态：{item.metadata['movement_status']}"
         spotlight_lines = [
             f"   {spotlight.get('label', '本场最佳')}：{spotlight.get('player')}｜{spotlight.get('team')}｜{spotlight.get('role')}｜{spotlight.get('hero')}｜KDA {spotlight.get('kda')}"
             for spotlight in item.spotlights
         ]
+        schedule_lines = []
+        if item.metadata.get("kind") == "tier1_reminder":
+            fixtures = item.metadata.get("fixtures", [])
+            if fixtures:
+                for fixture in fixtures:
+                    scheduled = datetime.fromisoformat(str(fixture["scheduled_at"]).replace("Z", "+00:00")).astimezone(DISPLAY_TZ)
+                    elimination = "淘汰局" if fixture.get("loser_out") else "非淘汰局"
+                    schedule_lines.append(
+                        f"   {scheduled.strftime('%m-%d %H:%M')}｜{fixture.get('team_a')} vs {fixture.get('team_b')}｜{fixture.get('stage_zh')} · {fixture.get('best_of')} · {elimination}"
+                    )
+            else:
+                schedule_lines.append("   具体对阵尚未由可核验来源公布。")
         lines.extend(
             [
                 f"{index}. {item.title_zh or item.title}",
                 f"   [{source_label(item)}] {item.source_name} · {item.published_at.astimezone(DISPLAY_TZ).strftime('%m-%d %H:%M')}",
                 f"   {item.summary_zh or item.summary}",
+                *schedule_lines,
                 *([engagement_line] if engagement_line else []),
                 *([verification_line] if verification_line else []),
                 *spotlight_lines,
