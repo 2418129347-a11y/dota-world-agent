@@ -9,8 +9,8 @@ on:
         type: string
   schedule:
     # GitHub scheduled runs may arrive hours late. These heartbeats cover the
-    # nominal 08:00 window and the preceding three UTC hours; the gate below
-    # only allows actual Asia/Shanghai 08:00-08:59 runs to build or send mail.
+    # nominal 08:00 window and the preceding three UTC hours. An early run may
+    # wait in the cloud until 08:00; a late run is accepted only through 09:29.
     - cron: "7,22,37,52 0-1,21-23 * * *"
 
 permissions:
@@ -36,8 +36,16 @@ jobs:
           minute="$(TZ=Asia/Shanghai date +%M)"
           minute_of_day=$((10#$hour * 60 + 10#$minute))
           should_run=false
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] || (( minute_of_day >= 480 && minute_of_day < 540 )); then
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             should_run=true
+          elif (( minute_of_day >= 390 && minute_of_day < 570 )); then
+            should_run=true
+            if (( minute_of_day < 480 )); then
+              wait_seconds=$(( (480 - minute_of_day) * 60 ))
+              echo "Early heartbeat at $local_time; waiting ${wait_seconds}s for 08:00 Asia/Shanghai"
+              sleep "$wait_seconds"
+              local_time="$(TZ=Asia/Shanghai date +%Y-%m-%dT%H:%M:%S%z)"
+            fi
           fi
           echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
           echo "local_time=$local_time" >> "$GITHUB_OUTPUT"
