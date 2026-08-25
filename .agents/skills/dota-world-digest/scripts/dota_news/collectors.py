@@ -162,6 +162,13 @@ def collect_reddit(source: dict[str, Any], now: datetime) -> list[NewsItem]:
     comments_api = str(source.get("comments_api") or "https://arctic-shift.photon-reddit.com/api/comments/search")
     items: list[NewsItem] = []
     candidate_count = 0
+    def keyword_match(keyword: str, value: str) -> bool:
+        return (
+            re.search(rf"(?<![a-z0-9_]){re.escape(keyword)}(?![a-z0-9_])", value) is not None
+            if re.fullmatch(r"[a-z0-9_-]+", keyword)
+            else keyword in value
+        )
+
     for raw in payload.get("data", []):
         post_id = clean_text(raw.get("id"), 30)
         title = clean_text(raw.get("title"), 300)
@@ -171,12 +178,10 @@ def collect_reddit(source: dict[str, Any], now: datetime) -> list[NewsItem]:
         if not post_id or not title:
             continue
         text = f"{title} {summary}".casefold()
-        if keywords and not any(
-            re.search(rf"(?<![a-z0-9_]){re.escape(keyword)}(?![a-z0-9_])", text)
-            if re.fullmatch(r"[a-z0-9_-]+", keyword)
-            else keyword in text
-            for keyword in keywords
-        ):
+        shuffle_hub = bool(re.search(r"post[- ]ti.*shuffle", text)) or any(
+            term in text for term in ("roster shuffle", "shuffle rumor", "shuffle rumour")
+        )
+        if keywords and not any(keyword_match(keyword, text) for keyword in keywords) and not shuffle_hub:
             continue
         if topic_keywords and not any(keyword in text for keyword in topic_keywords) and not official_reference:
             continue
@@ -212,13 +217,31 @@ def collect_reddit(source: dict[str, Any], now: datetime) -> list[NewsItem]:
             score = int(score_match.group(1)) if score_match else 0
             if score < min_score:
                 continue
-            query = urlencode({"link_id": post_id, "limit": comment_cap, "fields": "id"})
+            query = urlencode({"link_id": post_id, "limit": comment_cap, "fields": "id,body,score,created_utc"})
             comment_payload = fetch_json_retry(f"{comments_api}?{query}", timeout=15)
-            comments = len(comment_payload.get("data", []))
+            comment_rows = comment_payload.get("data", [])
+            comments = len(comment_rows)
         except Exception:
             continue
         if comments < min_comments:
             continue
+        movement_signals = []
+        if shuffle_hub:
+            ranked_comments = sorted(comment_rows, key=lambda value: int(value.get("score") or 0), reverse=True)
+            for comment in ranked_comments:
+                body = clean_text(comment.get("body"), 500)
+                lowered = body.casefold()
+                if (
+                    body
+                    and body not in movement_signals
+                    and any(keyword_match(keyword, lowered) for keyword in keywords)
+                ):
+                    movement_signals.append(body)
+                if len(movement_signals) >= 6:
+                    break
+            if movement_signals:
+                summary = "Post-TI 转会集中讨论中的高热度线索：" + " / ".join(movement_signals)
+                item.summary = clean_text(summary, 1200)
         item.metadata = {
             "kind": "official_reference" if official_reference else "forum_post",
             "engagement": {
@@ -226,6 +249,7 @@ def collect_reddit(source: dict[str, Any], now: datetime) -> list[NewsItem]:
                 "comments": comments,
                 "comments_capped": comments >= comment_cap,
             },
+            "movement_signals": movement_signals,
         }
         if official_reference:
             item.metadata.update({

@@ -12,11 +12,11 @@ collect → normalize → filter date → merge series → deduplicate → rank
 
 | Module | Responsibility |
 | --- | --- |
-| `collectors.py` | Fetch bounded Steam, OpenDota, and RSS inputs |
+| `collectors.py` | Fetch bounded Steam, OpenDota, RSS, and high-heat roster-shuffle community signals |
 | `models.py` | Serializable normalized news model |
 | `pipeline.py` | Recency, deduplication, trust scoring, and selection |
 | `editorial.py` | Series grouping, China relevance, circle-news policy, player roles, and match commentary |
-| `schedule.py` | Tier 1 reminders and exact bracket-stage verification for advancement/elimination copy |
+| `schedule.py` | Verified Tier 1 fixture cards plus exact bracket-stage verification for advancement/elimination copy |
 | `summarizers.py` | Optional OpenAI summary plus deterministic fallback |
 | `render.py` | Email-safe HTML and plain-text rendering |
 | `mailer.py` | QQ SMTP or Resend delivery |

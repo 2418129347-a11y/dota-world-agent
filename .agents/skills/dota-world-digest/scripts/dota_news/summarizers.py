@@ -85,6 +85,53 @@ def enforce_verification_labels(items: list[NewsItem]) -> list[NewsItem]:
     return items
 
 
+def enforce_movement_labels(items: list[NewsItem]) -> list[NewsItem]:
+    movement_categories = {"china_roster", "china_player", "elite_transfer", "elite_player_movement"}
+    for item in items:
+        if item.metadata.get("interest_category") not in movement_categories:
+            continue
+        if item.source_tier == "official":
+            status = "已官宣"
+        elif item.source_tier == "community":
+            status = "社区高热传闻 · 未经官宣"
+        elif len(item.corroborating_sources) >= 2:
+            status = "多源报道 · 待官宣"
+        else:
+            status = "媒体线索 · 待官宣"
+        item.metadata["movement_status"] = status
+        if item.source_tier == "official":
+            continue
+        title = item.title_zh or item.title
+        if not title.startswith(("传闻：", "动向传闻：", "社区传闻：")):
+            item.title_zh = f"动向传闻：{title}"
+        summary = item.summary_zh or item.summary or item.title
+        raw = f"{item.title} {item.summary}".casefold()
+        signals = []
+        if "falcons" in raw and any(term in raw for term in ("disband", "breakup", "rebuild", "leav")):
+            signals.append("Team Falcons 现阵容可能拆分或重组")
+        if "aui2000" in raw or "aui_2000" in raw or "aui 2000" in raw:
+            if "retir" in raw:
+                signals.append("教练 Aui_2000 出现退役信号")
+        if "cr1t" in raw and "retir" in raw:
+            signals.append("Cr1t- 出现退役或离队信号")
+        if "sneyking" in raw and "china" in raw:
+            signals.append("Sneyking 可能前往中国赛区")
+        if "skiter" in raw and "1win" in raw:
+            signals.append("skiter 与 1Win 的去向传闻正在流传")
+        if "skiter" in raw and ("betboom" in raw or "bb team" in raw):
+            signals.append("skiter 与 BetBoom 的去向传闻正在流传")
+        if "topson" in raw and "good chance" in raw and "playing on some roster" in raw:
+            signals.append("Topson 表示自己很可能加入一支新阵容继续参赛")
+            item.title_zh = "动向传闻：Topson 表示很可能加入新阵容继续参赛"
+        if signals:
+            item.summary_zh = "；".join(dict.fromkeys(signals)) + "。以上均为转会期线索，目前未经相关俱乐部或选手官宣。"
+            summary = item.summary_zh
+        if "官宣" not in summary:
+            item.summary_zh = compact(summary.rstrip("。") + "；目前尚未获得俱乐部或选手正式官宣。", 360)
+        item.why_it_matters = "这项动向可能改变顶级战队阵容、赛区力量或下一阶段赛事竞争格局。"
+    return items
+
+
 def _extract_output_text(payload: dict[str, Any]) -> str:
     if isinstance(payload.get("output_text"), str):
         return payload["output_text"]
@@ -175,12 +222,12 @@ def summarize(items: list[NewsItem], mode: str = "auto") -> tuple[list[NewsItem]
     if not items:
         return items, "none", warnings
     if mode == "fallback":
-        return enforce_verification_labels(enforce_rumor_labels(apply_fallback(items))), "fallback", warnings
+        return enforce_movement_labels(enforce_verification_labels(enforce_rumor_labels(apply_fallback(items)))), "fallback", warnings
     if mode == "openai" or (mode == "auto" and os.environ.get("OPENAI_API_KEY")):
         try:
-            return enforce_verification_labels(enforce_rumor_labels(apply_openai(items))), "openai", warnings
+            return enforce_movement_labels(enforce_verification_labels(enforce_rumor_labels(apply_openai(items)))), "openai", warnings
         except Exception as exc:
             if mode == "openai":
                 raise
             warnings.append(f"OpenAI 摘要失败，已降级：{type(exc).__name__}: {exc}")
-    return enforce_verification_labels(enforce_rumor_labels(apply_fallback(items))), "fallback", warnings
+    return enforce_movement_labels(enforce_verification_labels(enforce_rumor_labels(apply_fallback(items)))), "fallback", warnings

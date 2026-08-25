@@ -1,6 +1,7 @@
 {
   "timezone": "Asia/Shanghai",
   "reminder_days_before": 1,
+  "schedule_lookahead_days": 1,
   "events": [
     {
       "id": "ti-2026",
@@ -11,6 +12,7 @@
       "ends_on": "2026-08-23",
       "reminder": false,
       "verified_at": "2026-08-24",
+      "fixtures": [],
       "sources": [
         {"name": "Liquipedia TI 2026 赛程", "url": "https://liquipedia.net/dota2/The_International/2026/Main_Event"},
         {"name": "DLTV TI 2026 对阵", "url": "https://dltv.org/events/the-international-2026"}
@@ -25,6 +27,7 @@
       "ends_on": "2026-08-27",
       "reminder": true,
       "verified_at": "2026-08-24",
+      "fixtures": [],
       "schedule_note": "这是通往 Tier 1 主赛事的中国赛区预选；参赛队与具体对阵须以 BLAST/GGTV 最终公布为准。",
       "sources": [
         {"name": "BLAST 官方公告", "url": "https://blast.tv/dota/news/blast-slam-viii-malta"}
@@ -39,6 +42,7 @@
       "ends_on": "2026-09-27",
       "reminder": true,
       "verified_at": "2026-08-24",
+      "fixtures": [],
       "schedule_note": "PGL 总日历标注 09月17日开赛，但赛事详情页标注 09月19日；首轮日期和对阵会在写入赛果前再次核验。",
       "sources": [
         {"name": "PGL 官方总日历", "url": "https://www.pglesports.com/events/"},
@@ -54,6 +58,7 @@
       "ends_on": "2026-10-11",
       "reminder": true,
       "verified_at": "2026-08-24",
+      "fixtures": [],
       "schedule_note": "线上小组赛为 09月29日至10月03日，马耳他线下决赛为 10月08日至11日；首日对阵待官方公布。",
       "sources": [
         {"name": "BLAST 官方赛事页", "url": "https://blast.tv/dota/tournaments/blast-slam-viii"},
@@ -69,6 +74,7 @@
       "ends_on": "2026-11-29",
       "reminder": true,
       "verified_at": "2026-08-24",
+      "fixtures": [],
       "schedule_note": "官方已确认赛事日期；举办地、参赛队和首日对阵仍待公布。",
       "sources": [
         {"name": "BLAST 官方赛事页", "url": "https://blast.tv/dota/tournaments/blast-slam-ix/series"},

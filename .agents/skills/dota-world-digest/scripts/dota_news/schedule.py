@@ -92,10 +92,26 @@ def build_tier1_reminders(calendar: dict[str, Any], now: datetime, seen: set[str
             continue
         starts_on = date.fromisoformat(str(event["starts_on"]))
         lead_days = int(event.get("reminder_days_before", calendar.get("reminder_days_before", 1)))
-        if (starts_on - local_now.date()).days != lead_days:
+        fixtures = []
+        for fixture in event.get("fixtures", []):
+            required = ("scheduled_at", "team_a", "team_b", "stage_zh", "best_of", "verified_at", "source_url")
+            if not all(fixture.get(field) not in (None, "") for field in required):
+                continue
+            scheduled = datetime.fromisoformat(str(fixture["scheduled_at"]).replace("Z", "+00:00")).astimezone(DISPLAY_TZ)
+            fixtures.append({**fixture, "scheduled_at": scheduled.isoformat()})
+        fixtures.sort(key=lambda value: value["scheduled_at"])
+        lookahead_days = int(calendar.get("schedule_lookahead_days", 1))
+        upcoming_fixtures = [
+            fixture for fixture in fixtures
+            if 0 <= (
+                datetime.fromisoformat(str(fixture["scheduled_at"])).astimezone(DISPLAY_TZ).date() - local_now.date()
+            ).days <= lookahead_days
+        ]
+        event_reminder_due = (starts_on - local_now.date()).days == lead_days
+        if not event_reminder_due and not upcoming_fixtures:
             continue
         event_id = str(event["id"])
-        item_id = stable_id("tier1-reminder", event_id, starts_on.isoformat())
+        item_id = stable_id("tier1-schedule", event_id, local_now.date().isoformat())
         if item_id in seen:
             continue
         sources = event.get("sources", [])
@@ -105,7 +121,9 @@ def build_tier1_reminders(calendar: dict[str, Any], now: datetime, seen: set[str
         if end != event["starts_on"]:
             date_text += f"至{date.fromisoformat(end).strftime('%m月%d日')}"
         note = str(event.get("schedule_note") or "具体对阵和开赛时间以赛事官方赛程为准。")
-        title = f"赛程提醒：{event['name']} 将于 {starts_on.strftime('%m月%d日')} 开始"
+        title = f"具体赛程：{event['name']}"
+        if upcoming_fixtures:
+            note = f"未来 {lookahead_days + 1} 天已核验 {len(upcoming_fixtures)} 场具体对阵；时间均为北京时间。"
         reminders.append(NewsItem(
             item_id=item_id,
             title=title,
@@ -117,11 +135,15 @@ def build_tier1_reminders(calendar: dict[str, Any], now: datetime, seen: set[str
             source_tier="official",
             trust=95,
             category="schedule",
-            summary=f"比赛日期：{date_text}。{note}",
-            summary_zh=f"比赛日期：{date_text}。{note}",
+            summary=f"赛事日期：{date_text}。{note}",
+            summary_zh=f"赛事日期：{date_text}。{note}",
             impact="已建立赛前赛程快照；赛后只有在赛事、双方与赛制阶段全部匹配时，才会写入晋级或淘汰结论。",
             priority_group="tier1_schedule",
             corroborating_sources=[str(source.get("name")) for source in sources[1:] if source.get("name")],
-            metadata={"kind": "tier1_reminder", "event_id": event_id, "tier": event.get("tier", 1)},
+            metadata={
+                "kind": "tier1_reminder", "event_id": event_id, "event_name": event["name"],
+                "tier": event.get("tier", 1), "date_text": date_text,
+                "fixtures": upcoming_fixtures, "schedule_pending": not bool(upcoming_fixtures),
+            },
         ))
     return reminders

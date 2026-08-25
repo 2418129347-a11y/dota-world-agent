@@ -35,19 +35,29 @@ def item(item_id: str, title: str, source: str = "source", trust: int = 70, hour
 
 
 POLICY = {
-    "interest_categories": {"china_roster": 100, "china_player": 95, "top_event_offstage": 90, "elite_transfer": 85, "pro_patch": 80, "china_ecosystem": 75},
-    "circle_limit": 2,
+    "interest_categories": {"china_roster": 120, "china_player": 115, "elite_player_movement": 110, "elite_transfer": 108, "top_event_offstage": 90, "pro_patch": 80, "china_ecosystem": 75},
+    "china_news_limit": 3,
+    "tier1_player_movement_limit": 4,
+    "circle_limit": 1,
     "circle_trust_floor": 65,
     "community_rumor": {
         "enabled": True,
-        "allowed_categories": ["china_roster", "china_player"],
-        "min_score": 400,
-        "min_comments": 60,
+        "allowed_categories": ["china_roster", "china_player", "elite_transfer", "elite_player_movement"],
+        "min_score": 120,
+        "min_comments": 35,
+        "category_thresholds": {
+            "china_roster": {"min_score": 300, "min_comments": 50},
+            "china_player": {"min_score": 300, "min_comments": 50},
+            "elite_transfer": {"min_score": 120, "min_comments": 35},
+            "elite_player_movement": {"min_score": 120, "min_comments": 35},
+        },
         "max_age_hours": 48,
-        "daily_limit": 1,
+        "daily_limit": 4,
     },
     "china_match_limit": 8,
     "global_match_limit": 2,
+    "tier1_league_keywords": ["The International", "PGL Wallachia", "BLAST SLAM", "DreamLeague", "ESL One"],
+    "tier1_player_movement_entities": ["Team Falcons", "Falcons", "BetBoom", "1Win", "skiter", "Sneyking", "Cr1t", "Aui_2000"],
     "china_clubs": ["LGD Gaming"],
     "tracked_overseas_teams": {"Yakult Brothers": ["Emo"]},
     "legendary_players": ["Ame"],
@@ -144,18 +154,19 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(score, 95)
         self.assertIn("Emo", reason)
 
-    def test_circle_news_uses_allowed_categories_and_two_item_limit(self) -> None:
+    def test_china_news_and_tier1_movements_rank_above_misc_circle_news(self) -> None:
         candidates = [
             item("a", "LGD announces roster transfer", trust=95, tier="official"),
             item("b", "The International venue announced", trust=90),
-            item("c", "Ame joins elite roster", trust=88),
+            item("c", "Team Falcons roster shuffle: skiter leaves", trust=88),
             item("d", "Cosplay gallery", trust=99),
         ]
         apply_editorial_priority(candidates, POLICY, NOW)
         selected = compose_digest(candidates, POLICY)
-        circle = [news for news in selected if news.priority_group == "circle"]
-        self.assertEqual(len(circle), 2)
-        self.assertNotIn("d", [news.item_id for news in circle])
+        self.assertEqual([news.item_id for news in selected[:3]], ["a", "c", "b"])
+        self.assertEqual(candidates[0].priority_group, "china_circle")
+        self.assertEqual(candidates[2].priority_group, "t1_player_movement")
+        self.assertNotIn("d", [news.item_id for news in selected])
 
     def test_match_recap_is_not_top_event_offstage_news(self) -> None:
         recap = item("recap", "Team Yandex defeat LGD Gaming at The International 2026")
@@ -168,7 +179,59 @@ class PipelineTests(unittest.TestCase):
         actual_player = item("player", "Ame announces comeback interview")
         apply_editorial_priority([publisher, actual_player], POLICY, NOW)
         self.assertEqual(publisher.priority_group, "")
-        self.assertEqual(actual_player.priority_group, "circle")
+        self.assertEqual(actual_player.priority_group, "china_circle")
+
+    def test_generic_ti_schedule_results_index_is_not_news(self) -> None:
+        index = item("index", "The International 2026 - Schedule and Results", trust=70)
+        self.assertEqual(circle_category(index, POLICY), "")
+        apply_editorial_priority([index], POLICY, NOW)
+        self.assertEqual(compose_digest([index], POLICY), [])
+
+    def test_non_tier1_global_match_is_not_selected(self) -> None:
+        news = NewsItem(
+            "low", "EPL Masters：DYNASTY 胜 FTS", "https://example.com/low", NOW,
+            "opendota", "OpenDota", "data", 78, "result", "esports",
+            metadata={
+                "kind": "match", "match_id": "low", "match_ids": ["low"], "series_id": "low",
+                "league": "EPL Masters", "radiant": "DYNASTY", "dire": "FTS",
+                "winner": "DYNASTY", "loser": "FTS",
+            },
+        )
+        merged = merge_match_series([news], POLICY)
+        self.assertEqual(merged[0].priority_group, "untracked_match")
+        apply_editorial_priority(merged, POLICY, NOW)
+        self.assertEqual(compose_digest(merged, POLICY), [])
+
+    def test_tier1_player_movement_rumor_is_selected_and_labeled(self) -> None:
+        rumor = item("shuffle", "Post-TI roster shuffle", trust=42, tier="community")
+        rumor.summary = "Falcons may disband. Aui_2000 may retire. skiter may join 1Win."
+        rumor.metadata = {"kind": "forum_post", "engagement": {"score": 150, "comments": 70}}
+        apply_editorial_priority([rumor], POLICY, NOW)
+        self.assertEqual(rumor.priority_group, "t1_player_movement")
+        self.assertTrue(rumor.metadata["community_rumor"])
+        self.assertEqual(compose_digest([rumor], POLICY), [rumor])
+        summarized, _, _ = summarize([rumor], "fallback")
+        self.assertIn("Falcons", summarized[0].summary_zh)
+        self.assertIn("Aui_2000", summarized[0].summary_zh)
+        self.assertIn("未经官宣", summarized[0].metadata["movement_status"])
+
+    def test_static_team_roster_index_is_not_treated_as_transfer_news(self) -> None:
+        index = item("team-index", "TSpirit - team roster, matches, statistics", trust=70, tier="media")
+        apply_editorial_priority([index], POLICY, NOW)
+        self.assertEqual(index.metadata["interest_category"], "")
+        self.assertEqual(compose_digest([index], POLICY), [])
+
+    def test_low_value_legend_pre_event_quote_is_not_selected(self) -> None:
+        quote = item("quote", "Puppey before TI15: Anything below Top-3 would mean we did something wrong", trust=70, tier="media")
+        apply_editorial_priority([quote], POLICY, NOW)
+        self.assertEqual(compose_digest([quote], POLICY), [])
+
+    def test_topson_roster_hint_gets_clear_chinese_movement_summary(self) -> None:
+        hint = item("topson", "Topson: Good chance I'll be playing on some roster", trust=70, tier="media")
+        hint.summary = "Topson says there is a good chance he will be playing on some roster."
+        apply_editorial_priority([hint], POLICY, NOW)
+        summarized, _, _ = summarize([hint], "fallback")
+        self.assertIn("Topson 表示自己很可能加入一支新阵容继续参赛", summarized[0].summary_zh)
 
     def test_report_date_uses_asia_shanghai_calendar_day(self) -> None:
         previous_local_day = item("previous", "Previous")
@@ -212,6 +275,31 @@ class PipelineTests(unittest.TestCase):
             result = collect_reddit(source, NOW)
         self.assertEqual([news.item_id for news in result], ["t3_hot"])
         self.assertEqual(result[0].metadata["engagement"]["comments"], 60)
+
+    def test_reddit_shuffle_hub_extracts_bounded_player_movement_signals(self) -> None:
+        payload = {"data": [{
+            "id": "shuffle", "title": "The Post-TI 2026 Shuffle", "selftext": "Share rumors here",
+            "created_utc": NOW.timestamp(),
+        }]}
+        source = {
+            "id": "reddit", "name": "r/DotA2 社区", "url": "https://example.com/posts.json",
+            "tier": "community", "trust": 42, "interest_keywords": ["falcons", "sneyking", "skiter"],
+            "topic_keywords": ["shuffle"], "engagement_candidate_limit": 5,
+            "engagement": {"min_score": 100, "min_comments": 30, "comment_cap": 40},
+        }
+        comments = {"data": [
+            {"id": str(index), "body": "Sneyking going China and skiter to 1Win are being discussed", "score": 20 - index}
+            for index in range(40)
+        ]}
+        embed = b'<faceplate-number number="150" pretty></faceplate-number> upvotes'
+        with (
+            patch("dota_news.collectors._request", return_value=embed),
+            patch("dota_news.collectors.fetch_json", side_effect=[payload, comments]),
+        ):
+            result = collect_reddit(source, NOW)
+        self.assertEqual(len(result), 1)
+        self.assertIn("Sneyking going China", result[0].summary)
+        self.assertEqual(len(result[0].metadata["movement_signals"]), 1)
 
     def test_high_heat_allowlisted_official_disciplinary_link_is_selected(self) -> None:
         payload = {"data": [{
@@ -273,7 +361,7 @@ class PipelineTests(unittest.TestCase):
 
     def test_community_rumor_below_engagement_floor_is_excluded(self) -> None:
         rumor = item("quiet-rumor", "LGD roster rumor: Ame Topson XinQ", trust=42, tier="community")
-        rumor.metadata["engagement"] = {"score": 800, "comments": 59}
+        rumor.metadata["engagement"] = {"score": 800, "comments": 49}
         apply_editorial_priority([rumor], POLICY, NOW)
         self.assertFalse(rumor.metadata["community_rumor"])
         self.assertEqual(compose_digest([rumor], POLICY), [])
@@ -396,6 +484,11 @@ class PipelineTests(unittest.TestCase):
                 "ends_on": "2026-08-20", "reminder": True,
                 "verified_at": "2026-08-17",
                 "sources": [{"name": "赛事官网", "url": "https://example.com/cup"}],
+                "fixtures": [{
+                    "scheduled_at": "2026-08-18T19:00:00+08:00", "team_a": "Team A", "team_b": "Team B",
+                    "stage_zh": "败者组第一轮", "best_of": "Bo3", "loser_out": True,
+                    "verified_at": "2026-08-17", "source_url": "https://example.com/cup/match",
+                }],
             }],
         }
         reminders = build_tier1_reminders(calendar, NOW, set())
@@ -404,7 +497,12 @@ class PipelineTests(unittest.TestCase):
         template = ROOT / ".agents" / "skills" / "dota-world-digest" / "assets" / "digest.html"
         subject, rendered = render_html(reminders, template, NOW, [])
         self.assertIn("含赛程提醒", subject)
-        self.assertIn("Tier 1 赛程提醒", rendered)
+        self.assertIn("近期赛程", rendered)
+        self.assertIn("19:00", rendered)
+        self.assertIn("Team A", rendered)
+        self.assertIn("败者组第一轮", rendered)
+        self.assertIn("Bo3", rendered)
+        self.assertIn("淘汰局", rendered)
 
     def test_fallback_writes_natural_chinese_disband_copy(self) -> None:
         news = item("vg", "Vici Gaming disband immediately after getting eliminated from The International 2026", trust=70)

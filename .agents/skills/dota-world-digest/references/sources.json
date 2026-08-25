@@ -25,11 +25,14 @@
       "tier": "community",
       "trust": 42,
       "comments_api": "https://arctic-shift.photon-reddit.com/api/comments/search",
-      "engagement_candidate_limit": 8,
+      "engagement_candidate_limit": 20,
       "interest_keywords": [
         "china", "chinese", "lgd", "xtreme", "tidebound", "azure ray", "vici",
         "invictus gaming", "team aster", "ehome", "ame", "xinq", "somnus", "emo",
-        "faith_bian", "fy"
+        "faith_bian", "fy", "falcons", "betboom", "bb team", "team spirit", "liquid",
+        "yandex", "parivision", "1win", "1w team", "tundra", "nigma", "og", "skiter",
+        "sneyking", "cr1t", "aui_2000", "aui 2000", "malr1ne", "atf", "ammar", "collapse",
+        "yatoro", "larl", "nisha", "topson", "puppey", "sumail", "nightfall", "satanic"
       ],
       "topic_keywords": [
         "rumor", "rumour", "roster", "lineup", "transfer", "sign", "join", "replace",
@@ -60,8 +63,8 @@
         }
       ],
       "engagement": {
-        "min_score": 400,
-        "min_comments": 60,
+        "min_score": 100,
+        "min_comments": 30,
         "comment_cap": 100
       }
     },
@@ -73,7 +76,17 @@
       "tier": "media",
       "trust": 70,
       "publisher_from_feed": true,
-      "allowed_publishers": ["GosuGamers", "Hotspawn", "Esports Charts", "Field Level Media", "Dot Esports"]
+      "allowed_publishers": ["GosuGamers", "Hotspawn", "Esports Charts", "Field Level Media", "Dot Esports", "Escorenews.com", "Escorenews"]
+    },
+    {
+      "enabled": true,
+      "id": "google_news_roster_shuffle",
+      "name": "Google News / Dota 2 转会期",
+      "url": "https://news.google.com/rss/search?q=Dota+2+roster+shuffle+OR+transfer+OR+retire+OR+disband+when%3A2d&hl=en-US&gl=US&ceid=US%3Aen",
+      "tier": "media",
+      "trust": 70,
+      "publisher_from_feed": true,
+      "allowed_publishers": ["GosuGamers", "Hotspawn", "Dot Esports", "Escorenews.com", "Escorenews"]
     }
   ],
   "ranking": {
@@ -93,6 +106,9 @@
       "grand final": 12,
       "roster": 10,
       "transfer": 10,
+      "shuffle": 16,
+      "retire": 16,
+      "disband": 16,
       "ban": 8,
       "new hero": 18
     }
