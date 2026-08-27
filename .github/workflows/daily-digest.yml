@@ -8,10 +8,11 @@ on:
         required: false
         type: string
   schedule:
-    # GitHub scheduled runs may arrive hours late. These heartbeats cover the
-    # nominal 08:00 window and the preceding three UTC hours. An early run may
-    # wait in the cloud until 08:00; a late run is accepted only through 09:29.
-    - cron: "7,22,37,52 0-1,21-23 * * *"
+    # Low-contention Beijing heartbeats: 07:43 waits until 08:00, then 08:17
+    # and 09:17 provide bounded fallbacks. Runs after 09:29 are still rejected.
+    - cron: "43 23 * * *"
+    - cron: "17 0 * * *"
+    - cron: "17 1 * * *"
 
 permissions:
   contents: read

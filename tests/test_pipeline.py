@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import smtplib
 import sys
 import tempfile
 import unittest
@@ -555,6 +556,55 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(client.send_message.call_args.kwargs["from_addr"], "sender@qq.com")
         self.assertEqual(client.send_message.call_args.kwargs["to_addrs"], ["recipient@qq.com"])
         self.assertEqual(result["provider"], "smtp")
+        self.assertEqual(result["attempts"], 1)
+
+    def test_smtp_retries_disconnect_during_login(self) -> None:
+        env = {
+            "MAIL_PROVIDER": "smtp",
+            "SMTP_USERNAME": "sender@qq.com",
+            "SMTP_PASSWORD": "authorization-code",
+            "DIGEST_TO": "recipient@qq.com",
+        }
+        first_client = MagicMock()
+        first_client.login.side_effect = smtplib.SMTPServerDisconnected("temporary disconnect")
+        first_context = MagicMock()
+        first_context.__enter__.return_value = first_client
+        second_client = MagicMock()
+        second_context = MagicMock()
+        second_context.__enter__.return_value = second_client
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch("dota_news.mailer.ssl.create_default_context", return_value=object()),
+            patch("dota_news.mailer.smtplib.SMTP_SSL", side_effect=[first_context, second_context]) as smtp_ssl,
+            patch("dota_news.mailer.time.sleep") as sleep,
+        ):
+            result = send_email("subject", "<p>html</p>", "text", NOW.date())
+        self.assertEqual(smtp_ssl.call_count, 2)
+        sleep.assert_called_once_with(2.0)
+        second_client.send_message.assert_called_once()
+        self.assertEqual(result["attempts"], 2)
+
+    def test_smtp_does_not_retry_ambiguous_send_disconnect(self) -> None:
+        env = {
+            "MAIL_PROVIDER": "smtp",
+            "SMTP_USERNAME": "sender@qq.com",
+            "SMTP_PASSWORD": "authorization-code",
+            "DIGEST_TO": "recipient@qq.com",
+        }
+        client = MagicMock()
+        client.send_message.side_effect = smtplib.SMTPServerDisconnected("after DATA")
+        context = MagicMock()
+        context.__enter__.return_value = client
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch("dota_news.mailer.ssl.create_default_context", return_value=object()),
+            patch("dota_news.mailer.smtplib.SMTP_SSL", return_value=context) as smtp_ssl,
+            patch("dota_news.mailer.time.sleep") as sleep,
+        ):
+            with self.assertRaises(smtplib.SMTPServerDisconnected):
+                send_email("subject", "<p>html</p>", "text", NOW.date())
+        smtp_ssl.assert_called_once()
+        sleep.assert_not_called()
 
     def test_smtp_missing_secret_fails_closed(self) -> None:
         env = {"MAIL_PROVIDER": "smtp", "SMTP_USERNAME": "sender@qq.com", "DIGEST_TO": "recipient@qq.com"}

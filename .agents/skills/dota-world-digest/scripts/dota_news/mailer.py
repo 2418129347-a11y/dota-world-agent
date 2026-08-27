@@ -5,6 +5,7 @@ import json
 import os
 import smtplib
 import ssl
+import time
 import urllib.request
 from datetime import date
 from email.message import EmailMessage
@@ -71,7 +72,14 @@ def send_resend(subject: str, html_body: str, text_body: str, day: date, timeout
     return {"provider": "resend", "id": result.get("id")}
 
 
-def send_smtp(subject: str, html_body: str, text_body: str, timeout: int = 25) -> dict[str, Any]:
+def send_smtp(
+    subject: str,
+    html_body: str,
+    text_body: str,
+    timeout: int = 25,
+    retries: int = 3,
+    retry_delays: tuple[float, ...] = (2.0, 5.0),
+) -> dict[str, Any]:
     host, port, username, password, sender, recipient = smtp_config()
     message = EmailMessage()
     message["Subject"] = subject
@@ -81,18 +89,42 @@ def send_smtp(subject: str, html_body: str, text_body: str, timeout: int = 25) -
     message.set_content(text_body)
     message.add_alternative(html_body, subtype="html")
     tls_context = ssl.create_default_context()
-    if port == 465:
-        with smtplib.SMTP_SSL(host, port, timeout=timeout, context=tls_context) as client:
-            client.login(username, password)
-            client.send_message(message, from_addr=username, to_addrs=[recipient])
-    else:
-        with smtplib.SMTP(host, port, timeout=timeout) as client:
-            client.ehlo()
-            client.starttls(context=tls_context)
-            client.ehlo()
-            client.login(username, password)
-            client.send_message(message, from_addr=username, to_addrs=[recipient])
-    return {"provider": "smtp", "id": message.get("Message-ID")}
+    transient_errors = (
+        smtplib.SMTPServerDisconnected,
+        smtplib.SMTPConnectError,
+        TimeoutError,
+        ConnectionError,
+        OSError,
+    )
+    attempts = max(1, retries)
+    for attempt in range(1, attempts + 1):
+        phase = "connect"
+        try:
+            if port == 465:
+                with smtplib.SMTP_SSL(host, port, timeout=timeout, context=tls_context) as client:
+                    phase = "login"
+                    client.login(username, password)
+                    phase = "send"
+                    client.send_message(message, from_addr=username, to_addrs=[recipient])
+            else:
+                with smtplib.SMTP(host, port, timeout=timeout) as client:
+                    client.ehlo()
+                    client.starttls(context=tls_context)
+                    client.ehlo()
+                    phase = "login"
+                    client.login(username, password)
+                    phase = "send"
+                    client.send_message(message, from_addr=username, to_addrs=[recipient])
+            return {"provider": "smtp", "id": message.get("Message-ID"), "attempts": attempt}
+        except transient_errors:
+            # A failure after DATA begins is ambiguous: the server may already have
+            # accepted the message, so do not retry and risk a duplicate email.
+            if phase == "send" or attempt >= attempts:
+                raise
+            delay = retry_delays[min(attempt - 1, len(retry_delays) - 1)] if retry_delays else 0
+            if delay > 0:
+                time.sleep(delay)
+    raise RuntimeError("SMTP delivery failed")
 
 
 def send_email(subject: str, html_body: str, text_body: str, day: date, timeout: int = 25) -> dict[str, Any]:

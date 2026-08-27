@@ -40,7 +40,7 @@ To backfill a calendar day, enter an Asia/Shanghai date such as `2026-08-16`. Da
 
 ## 5. Schedule
 
-The included workflow schedules 15-minute heartbeats across the nominal UTC window and the preceding three hours. A heartbeat arriving from 06:30 through 07:59 `Asia/Shanghai` waits in the cloud until 08:00; one arriving from 08:00 through 09:29 sends immediately; later scheduled runs are rejected. The first successful delivery records the local calendar day in cached state, so later heartbeats skip SMTP delivery. This mitigates missing and multi-hour-delayed cron events, but GitHub does not guarantee that a scheduled run will be created. The workflow runs in GitHub's cloud and does not require a local computer or Codex session.
+The included workflow uses three low-contention heartbeats: 07:43 `Asia/Shanghai` waits in the cloud until 08:00, with bounded fallbacks at 08:17 and 09:17. Later scheduled runs are rejected after 09:29. The first successful delivery records the local calendar day in cached state, so later heartbeats skip SMTP delivery. SMTP connection or login disconnects retry up to three times; failures after message transmission begins are not retried because delivery is ambiguous and a retry could duplicate the email. This mitigates delayed cron events and transient QQ SMTP disconnects, but GitHub does not guarantee that a scheduled run will be created. The workflow runs in GitHub's cloud and does not require a local computer or Codex session.
 
 Tier 1 event reminders are configured in `.agents/skills/dota-world-digest/references/tier1-events.json` and appear one day before the event. Update the official source links and exact bracket-stage entries when organizers publish or revise a schedule.
 
