@@ -59,8 +59,16 @@ POLICY = {
     "global_match_limit": 2,
     "tier1_league_keywords": ["The International", "PGL Wallachia", "BLAST SLAM", "DreamLeague", "ESL One"],
     "tier1_player_movement_entities": ["Team Falcons", "Falcons", "BetBoom", "1Win", "skiter", "Sneyking", "Cr1t", "Aui_2000"],
-    "china_clubs": ["LGD Gaming"],
-    "tracked_overseas_teams": {"Yakult Brothers": ["Emo"]},
+    "china_clubs": ["LGD Gaming", "Yakult Brothers", "Yakult's Brothers", "Yakutou Brothers", "YkBros", "YB"],
+    "affiliation_max_age_days": 14,
+    "current_player_affiliations": {
+        "Emo": {
+            "nationality": "China", "team": "Yakult Brothers",
+            "team_aliases": ["Yakult's Brothers", "Yakutou Brothers", "YkBros", "YB"],
+            "team_region": "China", "status": "active", "verified_at": "2026-08-31",
+            "sources": ["https://example.com/team", "https://example.com/player"],
+        }
+    },
     "legendary_players": ["Ame"],
     "sensitive_terms": ["ban", "禁赛", "假赛"],
 }
@@ -147,13 +155,40 @@ class PipelineTests(unittest.TestCase):
         self.assertIn("Team Yandex 2–1 LGD Gaming", merged[0].title)
         self.assertEqual(merged[0].priority_group, "china_match")
 
-    def test_overseas_team_with_chinese_player_is_china_related(self) -> None:
+    def test_yakult_brothers_is_chinese_club_not_overseas(self) -> None:
         news = match_item("9", "Yakult Brothers", "SEA Team", series="9")
         news.metadata["radiant"] = "Yakult Brothers"
         news.metadata["dire"] = "SEA Team"
         score, reason = china_relation(news, POLICY)
-        self.assertEqual(score, 95)
-        self.assertIn("Emo", reason)
+        self.assertEqual(score, 100)
+        self.assertEqual(reason, "中国俱乐部：Yakult Brothers")
+        self.assertNotIn("旅外", reason)
+
+    def test_historical_glyph_roster_does_not_override_current_affiliation(self) -> None:
+        news = match_item("glyph", "GLYPH", "SEA Team", series="glyph")
+        news.metadata["radiant"] = "GLYPH"
+        news.metadata["dire"] = "SEA Team"
+        score, reason = china_relation(news, POLICY)
+        self.assertEqual((score, reason), (0, ""))
+
+    def test_fresh_overseas_affiliation_is_tracked_but_stale_one_is_not(self) -> None:
+        policy = json.loads(json.dumps(POLICY))
+        policy["china_clubs"] = ["LGD Gaming"]
+        policy["current_player_affiliations"]["Emo"].update({
+            "team": "SEA Team",
+            "team_aliases": [],
+            "team_region": "Southeast Asia",
+            "verified_at": datetime.now(timezone.utc).date().isoformat(),
+        })
+        news = match_item("sea-current", "SEA Team", "Other Team", series="sea-current")
+        news.metadata["radiant"] = "SEA Team"
+        news.metadata["dire"] = "Other Team"
+        self.assertEqual(china_relation(news, policy), (95, "中国选手旅外：Emo（SEA Team）"))
+
+        policy["current_player_affiliations"]["Emo"]["verified_at"] = (
+            datetime.now(timezone.utc).date() - timedelta(days=15)
+        ).isoformat()
+        self.assertEqual(china_relation(news, policy), (0, ""))
 
     def test_china_news_and_tier1_movements_rank_above_misc_circle_news(self) -> None:
         candidates = [

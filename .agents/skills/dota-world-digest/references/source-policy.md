@@ -11,6 +11,8 @@
 
 Prefer the highest-tier source when multiple items describe the same event. Keep the other source names as corroboration metadata. Treat disciplinary action, match fixing, and personal allegations as sensitive: require an official statement or at least two independent credible sources. An allowlisted direct link to a team or organizer account confirms only the sanction and wording visible in that announcement; it does not validate adjacent community claims. Otherwise exclude the item from the email.
 
+Player-team affiliation and team-region labels must describe the current active roster, not a player's historical stint. Keep each tracked affiliation source-linked and dated; after `affiliation_max_age_days`, omit the affiliation-based label until it is reverified. A Chinese player on a China-region club is not “overseas.” Prefer an official roster announcement, or corroborate a current roster database with a recent match/announcement source.
+
 Tier 1 reminders require a dated calendar entry with at least one organizer or official event source and a `verified_at` date. A displayed fixture additionally requires `scheduled_at`, both teams, stage, best-of format, elimination status, `verified_at`, and a direct schedule source. If any required fixture field is missing, show that exact pairings are pending rather than guessing. Advancement, lower-bracket, and elimination claims require an exact series snapshot with tournament, both teams, scheduled date, bracket stage, `loser_out`, `verified_at`, and at least two schedule sources. Article prose cannot substitute for the stage snapshot.
 
 ## Circle-news ranking

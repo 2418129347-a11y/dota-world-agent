@@ -49,11 +49,23 @@
   ],
   "china_clubs": [
     "LGD Gaming", "PSG.LGD", "Xtreme Gaming", "Team Tidebound", "Azure Ray",
-    "Vici Gaming", "Invictus Gaming", "Team Aster", "EHOME"
+    "Vici Gaming", "Invictus Gaming", "Team Aster", "EHOME", "Yakult Brothers",
+    "Yakult's Brothers", "Yakutou Brothers", "YkBros", "YB"
   ],
-  "tracked_overseas_teams": {
-    "Yakult Brothers": ["Emo"],
-    "GLYPH": ["Emo"]
+  "affiliation_max_age_days": 14,
+  "current_player_affiliations": {
+    "Emo": {
+      "nationality": "China",
+      "team": "Yakult Brothers",
+      "team_aliases": ["Yakult's Brothers", "Yakutou Brothers", "YkBros", "YB"],
+      "team_region": "China",
+      "status": "active",
+      "verified_at": "2026-08-31",
+      "sources": [
+        "https://liquipedia.net/dota2/Emo",
+        "https://news.zhibo8.com/game/2026-08-30/6a9412baaf92fnative.htm"
+      ]
+    }
   },
   "legendary_players": [
     "Ame", "Somnus", "fy", "Faith_bian", "XinQ", "xiao8", "Maybe", "BurNIng",

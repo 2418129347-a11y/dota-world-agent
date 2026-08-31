@@ -113,13 +113,13 @@ python .agents/skills/dota-world-digest/scripts/dota_digest.py \
 - RSS 与媒体白名单：新闻发现；邮件显示原始出版方，而不是聚合器名称。
 - Reddit：在最近 48 小时内，按类别门槛收录中国相关或 Tier 1 选手动向传闻；中国消息默认要求至少 300 赞同、50 条评论，全球顶级动向默认要求至少 120 赞同、35 条评论。转会集中讨论帖只提取与关注战队/选手有关的高热度线索，始终标记为未经官宣。帖子若直接链接到白名单内的俱乐部或赛事方官方账号，可作为官方公告的发现入口；邮件只确认公告明确给出的处罚。
 
-中国俱乐部、旅外选手名单和兴趣权重位于：
+中国俱乐部、已核验的当前选手归属和兴趣权重位于：
 
 ```text
 .agents/skills/dota-world-digest/references/editorial-policy.json
 ```
 
-信息源和信任分层见 [来源政策](.agents/skills/dota-world-digest/references/source-policy.md)。旅外选手转队后需要更新追踪名单；公开比赛列表本身无法始终可靠地判断选手国籍。
+信息源和信任分层见 [来源政策](.agents/skills/dota-world-digest/references/source-policy.md)。当前选手归属必须附核验日期和来源；超过有效期后不会继续使用旧阵容写“旅外”，直到重新核实。
 
 Tier 1 日期、官方链接和已核验的淘汰赛阶段位于：
 

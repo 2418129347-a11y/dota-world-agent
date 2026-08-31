@@ -37,6 +37,7 @@ Use the repository workflow at `.github/workflows/daily-digest.yml`. Keep `ENABL
 - Do not reproduce full articles; use short paraphrases and original links.
 - Do not mark a transfer, ban, match-fixing allegation, or disciplinary claim as confirmed without an official source or two independent credible sources.
 - Never infer advancement or elimination from article prose or keyword co-occurrence. Require an exact match on tournament, both teams, date, and bracket stage in the verified Tier 1 schedule snapshot. An upper-bracket loss must explicitly say the loser remains alive in the lower bracket.
+- Never infer a current player affiliation from a historical roster. Use the dated current-affiliation snapshot, expire stale entries, and classify China-region teams as Chinese clubs rather than “overseas.”
 - An allowlisted link to a team or tournament organizer's official account may confirm the disciplinary action itself. Report the confirmed sanction and its competition impact, but do not import surrounding forum claims about specific fixed matches, betting amounts, networks, or additional people unless those details independently meet the same verification rule.
 - Do not let a failed enrichment source suppress available official news.
 - Do not put tokens, addresses, or credentials in the repository, generated reports, or logs.
