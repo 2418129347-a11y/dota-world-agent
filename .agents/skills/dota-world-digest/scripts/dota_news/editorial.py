@@ -84,9 +84,32 @@ def china_relation(item: NewsItem, policy: dict[str, Any]) -> tuple[int, str]:
     for team in teams:
         if _team_matches(team, clubs):
             return 100, f"中国俱乐部：{team}"
-    for team, players in policy.get("tracked_overseas_teams", {}).items():
-        if any(_team_matches(candidate, [team]) for candidate in teams):
-            return 95, f"中国选手旅外：{'、'.join(players)}（{team}）"
+    now = datetime.now(timezone.utc)
+    max_age_days = int(policy.get("affiliation_max_age_days", 14))
+    for player, affiliation in policy.get("current_player_affiliations", {}).items():
+        if not isinstance(affiliation, dict) or affiliation.get("status") != "active":
+            continue
+        sources = affiliation.get("sources", [])
+        try:
+            verified_at = datetime.fromisoformat(str(affiliation.get("verified_at") or "")).date()
+        except ValueError:
+            continue
+        age_days = (now.date() - verified_at).days
+        if not sources or age_days < 0 or age_days > max_age_days:
+            continue
+        team_names = [str(affiliation.get("team") or "")] + [
+            str(alias) for alias in affiliation.get("team_aliases", [])
+        ]
+        matched_team = next(
+            (candidate for candidate in teams if _team_matches(candidate, team_names)),
+            "",
+        )
+        if not matched_team:
+            continue
+        if str(affiliation.get("team_region") or "").casefold() == "china":
+            return 100, f"中国俱乐部：{matched_team}"
+        if str(affiliation.get("nationality") or "").casefold() == "china":
+            return 95, f"中国选手旅外：{player}（{matched_team}）"
     return 0, ""
 
 
@@ -153,7 +176,7 @@ def merge_match_series(items: list[NewsItem], policy: dict[str, Any]) -> list[Ne
 
 def circle_category(item: NewsItem, policy: dict[str, Any]) -> str:
     text = f"{item.title} {item.summary}".casefold()
-    tracked_players = [player for players in policy.get("tracked_overseas_teams", {}).values() for player in players]
+    tracked_players = list(policy.get("current_player_affiliations", {}))
     china_entities = list(policy.get("china_clubs", [])) + tracked_players + [
         "LGD", "Xtreme", "Tidebound", "Azure Ray", "Vici", "Invictus Gaming", "Aster", "EHOME",
         "Emo", "Ame", "Somnus", "XinQ", "fy", "Faith_bian",

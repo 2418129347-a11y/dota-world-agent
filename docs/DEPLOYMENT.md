@@ -49,4 +49,4 @@ Tier 1 event reminders are configured in `.agents/skills/dota-world-digest/refer
 - `SMTP_PASSWORD` failure: generate a new QQ SMTP authorization code; do not use the QQ account password.
 - No email: check `ENABLE_SEND`, recipient Secret, spam folder, and the workflow report.
 - Empty digest: inspect source warnings and the configured time window.
-- Missing Chinese-player match: update `tracked_overseas_teams` in the editorial policy.
+- Missing Chinese-player match: update the source-linked `current_player_affiliations` snapshot in the editorial policy. Do not reuse a historical team after the player transfers.
