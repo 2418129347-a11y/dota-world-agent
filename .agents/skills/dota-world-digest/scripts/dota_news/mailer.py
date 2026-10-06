@@ -13,6 +13,10 @@ from email.utils import make_msgid
 from typing import Any
 
 
+class AmbiguousDeliveryError(smtplib.SMTPServerDisconnected):
+    """Transmission began; a later heartbeat must not automatically resend."""
+
+
 def resend_config() -> tuple[str, str, str]:
     api_key = os.environ.get("RESEND_API_KEY", "")
     sender = os.environ.get("DIGEST_FROM", "")
@@ -119,11 +123,17 @@ def send_smtp(
         except transient_errors:
             # A failure after DATA begins is ambiguous: the server may already have
             # accepted the message, so do not retry and risk a duplicate email.
-            if phase == "send" or attempt >= attempts:
+            if phase == "send":
+                raise AmbiguousDeliveryError("SMTP transmission outcome is uncertain") from None
+            if attempt >= attempts:
                 raise
             delay = retry_delays[min(attempt - 1, len(retry_delays) - 1)] if retry_delays else 0
             if delay > 0:
                 time.sleep(delay)
+        except Exception:
+            if phase == "send":
+                raise AmbiguousDeliveryError("SMTP transmission outcome is uncertain") from None
+            raise
     raise RuntimeError("SMTP delivery failed")
 
 
