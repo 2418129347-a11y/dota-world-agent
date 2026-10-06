@@ -28,6 +28,7 @@ class NewsItem:
     priority_group: str = ""
     spotlights: list[dict[str, Any]] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
+    content_sections: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)

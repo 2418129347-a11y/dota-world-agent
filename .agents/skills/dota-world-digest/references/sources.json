@@ -89,6 +89,11 @@
       "allowed_publishers": ["GosuGamers", "Hotspawn", "Dot Esports", "Escorenews.com", "Escorenews"]
     }
   ],
+  "editorial_enrichment": {
+    "article_domains": ["dota2.com", "store.steampowered.com", "gosugamers.net", "hotspawn.com", "escharts.com", "fieldlevelmedia.com", "dotesports.com", "escorenews.com"],
+    "discussion_posts_url": "https://arctic-shift.photon-reddit.com/api/posts/search?subreddit=DotA2&after=2d&limit=auto&sort=desc&fields=id,title,selftext,created_utc,url",
+    "discussion_comments_url": "https://arctic-shift.photon-reddit.com/api/comments/search"
+  },
   "ranking": {
     "hours": 30,
     "limit": 14,

@@ -1,0 +1,203 @@
+[
+  {
+    "item_id": "china",
+    "title": "【演示·虚构】DreamLeague：LGD Gaming 2–1 Team Spirit",
+    "url": "https://example.com/dota-preview/china",
+    "published_at": "2026-10-06T01:00:00+00:00",
+    "source_id": "preview-china",
+    "source_name": "虚构测试来源（非真实新闻）",
+    "source_tier": "data",
+    "trust": 78,
+    "summary": "以下为虚构数据，只用于验证邮件排版和内容层次，不是真实赛果。示例系列赛双方各赢一局，第三局由 LGD Gaming 获胜。",
+    "category": "esports",
+    "metadata": {
+      "kind": "match",
+      "editorial_evidence": [
+        {
+          "id": "china-e0",
+          "kind": "match_data",
+          "source": "虚构测试来源（非真实新闻）",
+          "url": "https://example.com/dota-preview/china",
+          "text": "【虚构】示例第一局前十分钟双方经济相近，二十分钟 LGD Gaming 领先 3,000，三十分钟领先扩大到 8,000，最终在三十五分钟获胜。这些数据说明优势在中后期扩大，但未提供具体团战记录，不能把优势归因于某次技能释放。"
+        },
+        {
+          "id": "china-e1",
+          "kind": "match_data",
+          "source": "虚构测试来源（非真实新闻）",
+          "url": "https://example.com/dota-preview/china",
+          "text": "【虚构】第二局 Team Spirit 在二十分钟拿到 4,000 经济优势，并在三十二分钟结束比赛，将示例系列赛扳平。只有经济曲线与结果，尚不能判断是否依靠某次肉山或买活。相比第一局，双方胜负角色发生变化，不能把整个系列赛描述成单边碾压。"
+        },
+        {
+          "id": "china-e2",
+          "kind": "match_data",
+          "source": "虚构测试来源（非真实新闻）",
+          "url": "https://example.com/dota-preview/china",
+          "text": "【虚构】第三局 LGD Gaming 二十分钟落后 5,000，到四十分钟转为领先 2,000，五十五分钟赢下比赛。读者可以据此理解这是中期落后、后期反超的走势；哪波团战造成逆转并未提供证据，因此不写具体失误。"
+        },
+        {
+          "id": "china-e3",
+          "kind": "match_data",
+          "source": "虚构测试来源（非真实新闻）",
+          "url": "https://example.com/dota-preview/china",
+          "text": "【虚构】本例最值得注意的是第三局经济形势发生逆转，与前两局相比明显更长。编辑可以指出后期韧性和走势变化，但不能以最终人头数、某个英雄的高伤害或一次领先易手证明唯一胜因。赛制阶段未核验，邮件不写淘汰结论。"
+        },
+        {
+          "id": "china-e4",
+          "kind": "community",
+          "source": "虚构测试来源（非真实新闻）",
+          "url": "https://example.com/dota-preview/china",
+          "text": "【虚构】示例评论一派认为阵容后期空间是关键，另一派认为经济反超还不足以说明阵容优劣，需要查看录像。这只是用于演示的两种观点，不是实际网友发言，更不代表论坛共识。"
+        }
+      ],
+      "match_ids": [
+        "preview1",
+        "preview2",
+        "preview3"
+      ],
+      "league": "DreamLeague",
+      "winner": "LGD Gaming",
+      "loser": "Team Spirit",
+      "series_id": "preview-china",
+      "series_score": "2–1"
+    },
+    "content_sections": [
+      {
+        "kind": "recap",
+        "title": "第1局：经济优势逐步扩大",
+        "text": "【虚构】示例第一局前十分钟双方经济相近，二十分钟 LGD Gaming 领先 3,000，三十分钟领先扩大到 8,000，最终在三十五分钟获胜。这些数据说明优势在中后期扩大，但未提供具体团战记录，不能把优势归因于某次技能释放。",
+        "evidence_ids": [
+          "china-e0"
+        ]
+      },
+      {
+        "kind": "recap",
+        "title": "第2局：领先方改变",
+        "text": "【虚构】第二局 Team Spirit 在二十分钟拿到 4,000 经济优势，并在三十二分钟结束比赛，将示例系列赛扳平。只有经济曲线与结果，尚不能判断是否依靠某次肉山或买活。相比第一局，双方胜负角色发生变化，不能把整个系列赛描述成单边碾压。",
+        "evidence_ids": [
+          "china-e1"
+        ]
+      },
+      {
+        "kind": "recap",
+        "title": "第3局：从落后到反超",
+        "text": "【虚构】第三局 LGD Gaming 二十分钟落后 5,000，到四十分钟转为领先 2,000，五十五分钟赢下比赛。读者可以据此理解这是中期落后、后期反超的走势；哪波团战造成逆转并未提供证据，因此不写具体失误。",
+        "evidence_ids": [
+          "china-e2"
+        ]
+      },
+      {
+        "kind": "editorial",
+        "title": "数据能解释什么",
+        "text": "【虚构】本例最值得注意的是第三局经济形势发生逆转，与前两局相比明显更长。编辑可以指出后期韧性和走势变化，但不能以最终人头数、某个英雄的高伤害或一次领先易手证明唯一胜因。赛制阶段未核验，邮件不写淘汰结论。",
+        "evidence_ids": [
+          "china-e3"
+        ]
+      },
+      {
+        "kind": "community",
+        "title": "不同复盘角度",
+        "text": "【虚构】示例评论一派认为阵容后期空间是关键，另一派认为经济反超还不足以说明阵容优劣，需要查看录像。这只是用于演示的两种观点，不是实际网友发言，更不代表论坛共识。",
+        "evidence_ids": [
+          "china-e4"
+        ]
+      }
+    ]
+  },
+  {
+    "item_id": "global",
+    "title": "【演示·虚构】DreamLeague：Team Falcons 2–0 Tundra",
+    "url": "https://example.com/dota-preview/global",
+    "published_at": "2026-10-06T01:00:00+00:00",
+    "source_id": "preview-global",
+    "source_name": "虚构测试来源（非真实新闻）",
+    "source_tier": "data",
+    "trust": 78,
+    "summary": "以下为虚构全球焦点比赛，演示如何用较短篇幅讲清两局走势。",
+    "category": "esports",
+    "metadata": {
+      "kind": "match",
+      "editorial_evidence": [
+        {
+          "id": "global-e0",
+          "kind": "match_data",
+          "source": "虚构测试来源（非真实新闻）",
+          "url": "https://example.com/dota-preview/global",
+          "text": "【虚构】示例首局 Team Falcons 在十分钟领先 1,000，二十分钟领先 4,000，三十一分钟结束比赛；第二局前二十分钟经济接近，三十分钟领先扩大到 6,000，在四十二分钟获胜。两局虽然同一胜者，但首局更早形成优势，次局的拉开差距更晚，不能只用“轻松横扫”概括。"
+        },
+        {
+          "id": "global-e1",
+          "kind": "match_data",
+          "source": "虚构测试来源（非真实新闻）",
+          "url": "https://example.com/dota-preview/global",
+          "text": "【虚构】可核实的示例数据仅支持两局优势建立时间不同。没有具体团战与英雄节奏证据，因此不编造关键肉山、买活或单杀。原始赛程阶段未知，晋级影响待核验；普通全球焦点比赛保持这一精简深度即可。"
+        }
+      ],
+      "match_ids": [
+        "demo4",
+        "demo5"
+      ],
+      "league": "DreamLeague",
+      "winner": "Team Falcons",
+      "loser": "Tundra",
+      "series_id": "preview-global",
+      "series_score": "2–0"
+    },
+    "content_sections": [
+      {
+        "kind": "recap",
+        "title": "两局回顾",
+        "text": "【虚构】示例首局 Team Falcons 在十分钟领先 1,000，二十分钟领先 4,000，三十一分钟结束比赛；第二局前二十分钟经济接近，三十分钟领先扩大到 6,000，在四十二分钟获胜。两局虽然同一胜者，但首局更早形成优势，次局的拉开差距更晚，不能只用“轻松横扫”概括。",
+        "evidence_ids": [
+          "global-e0"
+        ]
+      },
+      {
+        "kind": "editorial",
+        "title": "观察与局限",
+        "text": "【虚构】可核实的示例数据仅支持两局优势建立时间不同。没有具体团战与英雄节奏证据，因此不编造关键肉山、买活或单杀。原始赛程阶段未知，晋级影响待核验；普通全球焦点比赛保持这一精简深度即可。",
+        "evidence_ids": [
+          "global-e1"
+        ]
+      }
+    ]
+  },
+  {
+    "item_id": "rumor",
+    "title": "【演示·虚构】LGD 阵容动向传闻",
+    "url": "https://example.com/dota-preview/rumor",
+    "published_at": "2026-10-06T01:00:00+00:00",
+    "source_id": "preview-rumor",
+    "source_name": "虚构测试来源（非真实新闻）",
+    "source_tier": "community",
+    "trust": 42,
+    "summary": "这是虚构的测试传闻：社区帖子讨论示例选手 DemoRook 是否加入 LGD Gaming，涉及试训和阵容安排，目前没有官方公告。它仅用于验证情报正文、状态标签及查证链接位置。",
+    "category": "community",
+    "metadata": {
+      "kind": "forum_post",
+      "editorial_evidence": [
+        {
+          "id": "rumor-e0",
+          "kind": "community",
+          "source": "虚构测试来源（非真实新闻）",
+          "url": "https://example.com/dota-preview/rumor",
+          "text": "【虚构】测试帖子称示例选手 DemoRook 可能参加 LGD Gaming 试训，但未给出具体位置、合同或赛事报名信息。消息来自一个虚构论坛样本，不是俱乐部或选手官宣，测试用热度也不能提升其可信度。即使试训确有其事，也不等于完成签约；阵容和比赛资格仍需要正式公告与报名名单确认。邮件正文交代这些已知和未知，链接只留作核验入口。"
+        }
+      ],
+      "engagement": {
+        "score": 500,
+        "comments": 80
+      },
+      "community_rumor": true
+    },
+    "content_sections": [
+      {
+        "kind": "intelligence",
+        "title": "人物、动向与确认程度",
+        "text": "【虚构】测试帖子称示例选手 DemoRook 可能参加 LGD Gaming 试训，但未给出具体位置、合同或赛事报名信息。消息来自一个虚构论坛样本，不是俱乐部或选手官宣，测试用热度也不能提升其可信度。即使试训确有其事，也不等于完成签约；阵容和比赛资格仍需要正式公告与报名名单确认。邮件正文交代这些已知和未知，链接只留作核验入口。",
+        "evidence_ids": [
+          "rumor-e0"
+        ]
+      }
+    ]
+  }
+]

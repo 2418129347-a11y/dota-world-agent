@@ -23,7 +23,9 @@ Only the configured interests in `editorial-policy.json` are eligible. Rank them
 
 - Fetch metadata first and cap response sizes.
 - Apply a per-source timeout.
-- Keep raw text out of prompts beyond the bounded title and summary fields.
+- Only selected items receive editorial enrichment. Allowlisted public article prose is capped at 6,000 characters; check robots on initial requests and redirects, never bypass login/paywalls/anti-bot systems. Unresolvable Google News links remain discovery metadata, not invented article bodies.
+- Use a shared three-minute budget for match details, article bodies and discussion evidence. After expiry mark sources unavailable and continue with existing official news. Match discussion discovery is independent of roster interest filters, but requires event, both teams, post-match context and nearby publication date. Up to two posts and five useful high-voted comments each remain attributed opinions.
+- Send only bounded public evidence to DeepSeek, never mail configuration or credentials. Returned references and checkable entities/numbers are validated, but matching references alone do not verify a paraphrase's semantic truth.
 - Canonicalize URLs and remove tracking parameters before deduplication.
 - Report source failures; never interpret a timeout as “no news.”
 

@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 
 from .models import NewsItem
 from .pipeline import section_for, source_label
+from .summarizers import SECTION_LABELS
 
 
 SECTION_ORDER = ["中国 Dota 赛场", "中国 Dota 动态", "转会期情报（T1）", "近期赛程", "全球焦点赛事", "圈内消息", "传奇选手动态", "官方与版本", "数据洞察"]
@@ -48,7 +49,7 @@ def _item_html(item: NewsItem, index: int) -> str:
     notes = []
     if item.impact:
         notes.append(f'<div class="impact"><strong>赛事影响</strong><span>{html.escape(item.impact)}</span></div>')
-    if item.editorial_note:
+    if item.editorial_note and not any(section.get("kind") == "editorial" for section in item.content_sections):
         notes.append(f'<div class="editorial"><strong>编辑点评</strong><span>{html.escape(item.editorial_note)}</span></div>')
     if not notes and item.why_it_matters:
         notes.append(f'<div class="impact"><strong>值得关注</strong><span>{html.escape(item.why_it_matters)}</span></div>')
@@ -56,14 +57,39 @@ def _item_html(item: NewsItem, index: int) -> str:
     for spotlight in item.spotlights:
         damage = int(spotlight.get("hero_damage") or 0)
         damage_text = f" · 英雄伤害 {damage:,}" if damage else ""
+        inferred = " · 数据推断" if spotlight.get("role_inferred") else ""
+        game = f" · 第{spotlight['game_number']}局" if spotlight.get("game_number") else ""
         spotlights.append(
             '<div class="spotlight">'
             f'<span class="spotlight-label">{html.escape(str(spotlight.get("label") or "本场最佳"))}</span>'
             f'<strong>{html.escape(str(spotlight.get("player") or ""))}</strong>'
-            f'<span>{html.escape(str(spotlight.get("team") or ""))} · {html.escape(str(spotlight.get("role") or ""))}</span>'
+            f'<span>{html.escape(str(spotlight.get("team") or ""))} · {html.escape(str(spotlight.get("role") or ""))}{inferred}{game}</span>'
             f'<span>{html.escape(str(spotlight.get("hero") or ""))} · KDA {html.escape(str(spotlight.get("kda") or ""))}{damage_text}</span>'
+            f'<span class="spotlight-basis">{html.escape(str(spotlight.get("basis") or ""))}</span>'
             '</div>'
         )
+    def blocks(kinds: set[str]) -> str:
+        rendered = []
+        for section in item.content_sections:
+            if section.get("kind") not in kinds:
+                continue
+            label = SECTION_LABELS.get(section["kind"], "正文")
+            paragraphs = "".join(f"<p>{html.escape(part)}</p>" for part in str(section.get("text") or "").splitlines() if part.strip())
+            rendered.append(f'<div class="body-section"><h4>{label} · {html.escape(str(section.get("title") or label))}</h4>{paragraphs}</div>')
+        return "".join(rendered)
+    source_rows = {row["id"]: row for row in item.metadata.get("editorial_evidence", [])}
+    used = dict.fromkeys(eid for section in item.content_sections for eid in section.get("evidence_ids", []))
+    links = []
+    for eid in used:
+        row = source_rows.get(eid)
+        if not row:
+            continue
+        heat = f" · 评论赞同 {row['score']}" if "score" in row else ""
+        links.append(f'<a href="{html.escape(str(row["url"]), quote=True)}">{html.escape(str(row["source"]))}</a>{heat}')
+    links.append(f'<a href="{html.escape(item.url, quote=True)}">原始来源</a>')
+    sources_html = '<div class="corroboration">查证来源：' + " · ".join(links) + "</div>"
+    mode_html = '<div class="corroboration">简版：仅呈现可核实资料，未生成完整 AI 复盘。</div>' if item.metadata.get("content_mode") == "fallback" else ""
+    community_note = '<div class="corroboration">社区观点仅为少量公开讨论样本，不代表普遍共识或已核实事实。</div>' if any(s.get("kind") == "community" for s in item.content_sections) else ""
     return f"""
 <article class="news-card">
   <div class="news-index">{index:02d}</div>
@@ -71,11 +97,17 @@ def _item_html(item: NewsItem, index: int) -> str:
     <div class="meta"><span class="tier tier-{html.escape(item.source_tier)}">{html.escape(source_label(item))}</span><span>{html.escape(item.source_name)}</span><span>{item.published_at.astimezone(DISPLAY_TZ).strftime('%m-%d %H:%M')}</span></div>
     <h3><a href="{html.escape(item.url, quote=True)}">{html.escape(item.title_zh or item.title)}</a></h3>
     <p>{html.escape(item.summary_zh or item.summary)}</p>
+    {blocks({'recap', 'intelligence'})}
     {''.join(spotlights)}
     {''.join(notes)}
+    {blocks({'editorial'})}
+    {blocks({'community'})}
+    {community_note}
     {engagement_html}
     {verification_html}
     {corroboration}
+    {mode_html}
+    {sources_html}
   </div>
 </article>""".strip()
 
@@ -175,7 +207,11 @@ def render_text(items: list[NewsItem], generated_at: datetime, warnings: list[st
         elif item.metadata.get("movement_status"):
             verification_line = f"   动向状态：{item.metadata['movement_status']}"
         spotlight_lines = [
-            f"   {spotlight.get('label', '本场最佳')}：{spotlight.get('player')}｜{spotlight.get('team')}｜{spotlight.get('role')}｜{spotlight.get('hero')}｜KDA {spotlight.get('kda')}"
+            f"   {spotlight.get('label', '本场最佳')}：{spotlight.get('player')}｜{spotlight.get('team')}｜{spotlight.get('role')}"
+            + ("（数据推断）" if spotlight.get("role_inferred") else "")
+            + (f"｜第{spotlight['game_number']}局" if spotlight.get("game_number") else "")
+            + f"｜{spotlight.get('hero')}｜KDA {spotlight.get('kda')}｜英雄伤害 {int(spotlight.get('hero_damage') or 0):,}"
+            + (f"\n   评选依据：{spotlight['basis']}" if spotlight.get("basis") else "")
             for spotlight in item.spotlights
         ]
         schedule_lines = []
@@ -190,18 +226,31 @@ def render_text(items: list[NewsItem], generated_at: datetime, warnings: list[st
                     )
             else:
                 schedule_lines.append("   具体对阵尚未由可核验来源公布。")
+        def section_lines(kinds: set[str]) -> list[str]:
+            return [f"   {SECTION_LABELS[section['kind']]} · {section.get('title', '')}：{section.get('text', '')}"
+                    for section in item.content_sections if section.get("kind") in kinds]
+        source_rows = {row["id"]: row for row in item.metadata.get("editorial_evidence", [])}
+        used = dict.fromkeys(eid for section in item.content_sections for eid in section.get("evidence_ids", []))
+        evidence_lines = [f"   查证来源：{source_rows[eid]['source']}"
+                          + (f" · 评论赞同 {source_rows[eid]['score']}" if "score" in source_rows[eid] else "")
+                          + f"：{source_rows[eid]['url']}" for eid in used if eid in source_rows]
         lines.extend(
             [
                 f"{index}. {item.title_zh or item.title}",
                 f"   [{source_label(item)}] {item.source_name} · {item.published_at.astimezone(DISPLAY_TZ).strftime('%m-%d %H:%M')}",
                 f"   {item.summary_zh or item.summary}",
+                *section_lines({"recap", "intelligence"}),
                 *schedule_lines,
                 *([engagement_line] if engagement_line else []),
                 *([verification_line] if verification_line else []),
                 *spotlight_lines,
                 *([f"   赛事影响：{item.impact}"] if item.impact else []),
-                *([f"   编辑点评：{item.editorial_note}"] if item.editorial_note else []),
+                *([f"   编辑点评：{item.editorial_note}"] if item.editorial_note and not any(s.get("kind") == "editorial" for s in item.content_sections) else []),
+                *section_lines({"editorial", "community"}),
+                *(["   社区观点仅为少量公开讨论样本，不代表普遍共识或已核实事实。"] if any(s.get("kind") == "community" for s in item.content_sections) else []),
                 *([f"   值得关注：{item.why_it_matters}"] if item.why_it_matters and not item.impact and not item.editorial_note else []),
+                *(["   简版：仅呈现可核实资料，未生成完整 AI 复盘。"] if item.metadata.get("content_mode") == "fallback" else []),
+                *evidence_lines,
                 f"   原文：{item.url}",
                 "",
             ]

@@ -4,7 +4,7 @@
 
 ```text
 collect → normalize → filter date → merge series → deduplicate → rank
-        → verify bracket stage → enrich matches → summarize → add reminders
+        → verify bracket stage → enrich matches/articles/discussion evidence → summarize → add reminders
         → render → deliver → report
 ```
 
@@ -17,7 +17,8 @@ collect → normalize → filter date → merge series → deduplicate → rank
 | `pipeline.py` | Recency, deduplication, trust scoring, and selection |
 | `editorial.py` | Series grouping, China relevance, circle-news policy, player roles, and match commentary |
 | `schedule.py` | Verified Tier 1 fixture cards plus exact bracket-stage verification for advancement/elimination copy |
-| `summarizers.py` | Optional OpenAI summary plus deterministic fallback |
+| `enrichment.py` | Allowlisted public article prose, robots-aware redirects and exact-match post-game discussion evidence |
+| `summarizers.py` | DeepSeek-only Chinese editorial sections, evidence/field validation and deterministic fallback |
 | `render.py` | Email-safe HTML and plain-text rendering |
 | `mailer.py` | QQ SMTP or Resend delivery |
 | `cli.py` | Orchestration, target dates, state, reports, and command-line interface |
@@ -25,6 +26,8 @@ collect → normalize → filter date → merge series → deduplicate → rank
 ## Trust boundaries
 
 External titles, summaries, RSS markup, API fields, and model inputs are untrusted. Collection limits response sizes and timeouts. Rendering escapes untrusted HTML. The optional model receives bounded data and structured output requirements.
+
+`NewsItem.content_sections` is optional for backward-compatible fixtures. Each paragraph contains kind, title, text and evidence IDs; evidence stores source URL/name and optional publication/engagement metadata. Model-written sections never overwrite verified bracket impact. Reports expose per-item content mode, source availability, validation and failure reason, plus request token usage counted once per batch. Successful JSON/reference checks do not prove every translated statement true.
 
 Sensitive disciplinary or integrity claims require an official source or sufficient independent corroboration. Community signals do not become facts merely because they are popular.
 

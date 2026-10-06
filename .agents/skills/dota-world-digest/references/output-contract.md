@@ -5,7 +5,7 @@ Generate UTF-8 HTML, plain text, and a JSON run report.
 For every selected item include:
 
 - Chinese display title. Preserve proper nouns and patch numbers.
-- A factual summary of no more than three short sentences.
+- A short factual lead plus standalone paragraphs: China-related matches target 500–800 Chinese characters, other Tier 1 matches 250–400, circle intelligence 150–300. Do not invent details to meet the target. Intelligence explains who, what changed, the source basis, confirmation status, and a qualified specific impact; omit items lacking substantive evidence rather than displaying only a link.
 - A specific “赛事影响”“编辑点评” or “值得关注” line; never use a generic filler sentence.
 - Source name, publication time, category, trust label, and original URL.
 - Corroborating source names when present.
@@ -14,11 +14,13 @@ For every selected item include:
 
 For match series, merge individual games and include, when the data is available:
 
-- Series score and a short game-by-game progression.
+- Series score and game-by-game progression covering all collected games, including Bo5. Keep original game numbers when details are unavailable; never relabel the last available partial detail as the actual deciding game.
 - A “本报 MVP” card with alias, team, inferred position/role, hero, KDA, and hero damage.
 - A data-backed note about duration, lead changes, unusual picks, or decisive performance.
 - Chinese-club and tracked-Chinese-player matches in full; other matches only when globally important.
 - Explicitly qualify inferred roles. Never describe “本报 MVP” as an official tournament award.
+- Include the game number and evaluation basis for each player spotlight. MVP is a data-backed single-game standout, not a subjective award or a reconstructed whole-series performance.
+- Order each card as lead/recap, player spotlights, verified impact, editorial analysis, community viewpoints, then source links. Separate facts from attributed viewpoints; summarize disagreements where available. Up to two matching forum posts and five useful high-voted comments each are samples, not consensus. HTML and plain text include the same prose, damage, roles, basis and links.
 - Write “晋级”“掉入败者组”或“出局” only after the result matches a verified schedule snapshot on tournament, both teams, date, and bracket stage. If the stage is unavailable, omit the conclusion and say the official bracket still needs verification.
 
 For an upcoming fixture panel, include only source-verified fields:

@@ -3,18 +3,20 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time as clock_time
 from datetime import date, datetime, time, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from .collectors import collect_all
 from .editorial import apply_external_match_impacts, compose_digest, enrich_match_reports, merge_match_series
+from .enrichment import enrich_editorial, seed_evidence
 from .mailer import AmbiguousDeliveryError, send_email
 from .models import NewsItem
 from .pipeline import select_items
 from .render import render_html, render_text
 from .schedule import apply_verified_schedule_context, build_tier1_reminders
-from .summarizers import summarize
+from .summarizers import summarize, substantive
 from .utils import canonical_url
 
 
@@ -80,7 +82,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--hours", type=int)
     parser.add_argument("--limit", type=int)
     parser.add_argument("--date", type=date.fromisoformat, help="Generate one Asia/Shanghai calendar day (YYYY-MM-DD).")
-    parser.add_argument("--summarizer", choices=("auto", "fallback", "openai"), default="auto")
+    parser.add_argument("--summarizer", choices=("auto", "fallback", "deepseek"), default="auto",
+                        help="Only DeepSeek AI is supported; old openai mode was removed, use deepseek or auto.")
     parser.add_argument("--send", action="store_true", help="Send through the configured SMTP or Resend provider after rendering.")
     parser.add_argument("--write-state", action="store_true")
     parser.add_argument("--ignore-seen", action="store_true")
@@ -100,6 +103,21 @@ def run(argv: list[str] | None = None) -> int:
     policy_path = SKILL_ROOT / "references" / "editorial-policy.json"
     editorial_policy = _load_json(policy_path)
     tier1_calendar = _load_json(SKILL_ROOT / "references" / "tier1-events.json")
+    # Check delivery state before public/API calls: later heartbeats must not spend tokens again.
+    early_state = _load_state(args.state_file)
+    early_date = now.astimezone(DISPLAY_TZ).date().isoformat()
+    already_sent = args.skip_if_sent_today and early_date in set(early_state.get("sent_dates", []))
+    uncertain = early_date in set(early_state.get("uncertain_dates", []))
+    if args.send and (already_sent or uncertain):
+        reason = "already_sent_today" if already_sent else "delivery_uncertain_requires_review"
+        args.output_dir.mkdir(parents=True, exist_ok=True)
+        blocked_report = {"generated_at": now.isoformat(), "report_date": early_date, "delivery_date": early_date,
+                          "subject": "今日已发送或待人工核验，不重新生成", "collected_count": 0, "selected_count": 0,
+                          "summarizer": "none", "warnings": [], "outputs": {}, "items": [],
+                          "delivery": {"requested": True, "sent": False, "skipped": True, "reason": reason}}
+        (args.output_dir / "report.json").write_text(json.dumps(blocked_report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(json.dumps({"delivery": blocked_report["delivery"]}, ensure_ascii=False))
+        return 0 if already_sent else 1
     ranking = dict(config.get("ranking", {}))
     if args.hours is not None:
         ranking["hours"] = args.hours
@@ -125,7 +143,16 @@ def run(argv: list[str] | None = None) -> int:
     apply_verified_schedule_context(selected, tier1_calendar)
     apply_external_match_impacts(selected, collected)
     if not args.fixture:
-        warnings.extend(enrich_match_reports(selected))
+        deadline = clock_time.monotonic() + 180
+        warnings.extend(enrich_match_reports(selected, deadline))
+        warnings.extend(enrich_editorial(selected, config, deadline))
+    else:
+        for item in selected:
+            seed_evidence(item)
+    omitted = [item.item_id for item in selected if not substantive(item)]
+    selected = [item for item in selected if substantive(item)]
+    if omitted:
+        warnings.append(f"{len(omitted)} 条情报缺少实质正文或摘要，已省略，未以链接凑数。")
     selected, summarizer_mode, summary_warnings = summarize(selected, args.summarizer)
     warnings.extend(summary_warnings)
     selected.extend(build_tier1_reminders(tier1_calendar, now, seen))
@@ -183,6 +210,14 @@ def run(argv: list[str] | None = None) -> int:
         "collected_count": len(collected),
         "selected_count": len(selected),
         "summarizer": summarizer_mode,
+        "summary_service": "deepseek" if args.summarizer != "fallback" else "deterministic",
+        "summary_usage": {key: sum(item.metadata.get("summary_usage", {}).get(key, 0) for item in selected)
+                          for key in ("prompt_tokens", "completion_tokens", "total_tokens")},
+        "omitted_content_ids": omitted,
+        "content_status": [{"item_id": item.item_id, "mode": item.metadata.get("content_mode", "deterministic"),
+                            "model": item.metadata.get("summary_model"), "sources": item.metadata.get("enrichment", {}),
+                            "validation": item.metadata.get("summary_validation"),
+                            "fallback_reason": item.metadata.get("summary_failure")} for item in selected],
         "warnings": warnings,
         "delivery": delivery,
         "outputs": {"html": str(html_path), "text": str(text_path)},

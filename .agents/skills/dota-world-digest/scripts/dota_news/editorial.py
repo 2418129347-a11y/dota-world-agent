@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import json
 from collections import Counter
 from datetime import datetime, timezone
 from typing import Any
@@ -56,7 +57,10 @@ HEROES_ZH = {
 
 def _team_matches(name: str, candidates: list[str]) -> bool:
     normalized = name.casefold().strip()
-    return any(candidate.casefold() in normalized or normalized in candidate.casefold() for candidate in candidates if candidate)
+    if not normalized:
+        return False
+    return any(_alias_in_text(candidate.strip(), normalized) or _alias_in_text(normalized, candidate.strip())
+               for candidate in candidates if candidate.strip())
 
 
 def _alias_in_text(alias: str, text: str) -> bool:
@@ -222,7 +226,7 @@ def circle_category(item: NewsItem, policy: dict[str, Any]) -> str:
         return "elite_player_movement"
     if event and offstage:
         return "top_event_offstage"
-    if transfer and (legendary or not china):
+    if transfer and (legendary or tier1_entity):
         return "elite_transfer"
     if patch:
         return "pro_patch"
@@ -399,29 +403,50 @@ def _hero_name(hero_id: Any, heroes: dict[str, Any]) -> str:
     return HEROES_ZH.get(english, english)
 
 
-def enrich_match_reports(items: list[NewsItem]) -> list[str]:
+def enrich_match_reports(items: list[NewsItem], deadline: float | None = None) -> list[str]:
+    from .enrichment import evidence, remaining_timeout
+    import time
+    deadline = deadline if deadline is not None else time.monotonic() + 180
     warnings: list[str] = []
     matches = [item for item in items if item.metadata.get("kind") == "match"]
     if not matches:
         return warnings
     try:
-        heroes = fetch_json("https://api.opendota.com/api/constants/heroes")
+        heroes = fetch_json("https://api.opendota.com/api/constants/heroes", timeout=remaining_timeout(deadline))
     except Exception as exc:
-        warnings.append(f"英雄名称表读取失败：{type(exc).__name__}: {exc}")
+        warnings.append(f"英雄名称表读取失败：{type(exc).__name__}")
         heroes = {}
     for item in matches:
         details = []
-        for match_id in item.metadata.get("match_ids", [])[-3:]:
+        item.content_sections = []
+        missing = []
+        for game_number, match_id in enumerate(item.metadata.get("match_ids", []), 1):
             try:
-                details.append(fetch_json(f"https://api.opendota.com/api/matches/{match_id}", timeout=20))
+                detail = fetch_json(f"https://api.opendota.com/api/matches/{match_id}", timeout=remaining_timeout(deadline, 20))
+                if not isinstance(detail, dict) or "radiant_win" not in detail or not detail.get("duration"):
+                    raise ValueError("incomplete match details")
+                if detail.get("match_id") and str(detail["match_id"]) != str(match_id):
+                    raise ValueError("wrong match identity")
+                named_teams = [str(detail.get(field) or "") for field in ("radiant_name", "dire_name")]
+                expected = [str(item.metadata.get(field) or "") for field in ("winner", "loser")]
+                if all(named_teams) and not all(any(_team_matches(team, [candidate]) for candidate in expected) for team in named_teams):
+                    raise ValueError("wrong teams in match details")
+                details.append((game_number, str(match_id), detail))
             except Exception as exc:
-                warnings.append(f"比赛 {match_id} 详情读取失败：{type(exc).__name__}: {exc}")
+                missing.append(game_number)
+                item.content_sections.append({"kind": "recap", "title": f"第{game_number}局",
+                                              "text": "本局详细数据暂不可用，不推测比赛过程。", "evidence_ids": []})
+                warnings.append(f"比赛 {match_id} 详情读取失败：{type(exc).__name__}")
+        item.metadata.setdefault("enrichment", {})["match_details"] = "partial" if missing else "available"
+        item.metadata["missing_game_numbers"] = missing
         if not details:
+            if not item.impact:
+                item.impact = "赛事阶段尚未完成核验，暂不判断晋级、败者组或淘汰；后续对阵待官方赛程确认。"
             continue
         narratives = []
-        candidate_performances: list[tuple[float, dict[str, Any], list[dict[str, Any]]]] = []
+        candidate_performances: list[tuple[float, dict[str, Any], list[dict[str, Any]], int]] = []
         series_winner = str(item.metadata.get("winner") or "")
-        for index, detail in enumerate(details, 1):
+        for index, match_id, detail in details:
             duration = round(int(detail.get("duration") or 0) / 60)
             radiant = str(detail.get("radiant_name") or "天辉")
             dire = str(detail.get("dire_name") or "夜魇")
@@ -429,7 +454,24 @@ def enrich_match_reports(items: list[NewsItem]) -> list[str]:
             r_score, d_score = detail.get("radiant_score"), detail.get("dire_score")
             winner_score = r_score if detail.get("radiant_win") else d_score
             loser_score = d_score if detail.get("radiant_win") else r_score
-            narratives.append(f"第{index}局 {winner} 以 {winner_score}–{loser_score} 取胜（{duration}分钟）")
+            result = f"第{index}局 {winner} 以 {winner_score}–{loser_score} 取胜（{duration}分钟）"
+            narratives.append(result)
+            gold = detail.get("radiant_gold_adv") or []
+            timeline = []
+            for minute in (10, 20, 30, 40, 50, 60):
+                if minute >= len(gold) or gold[minute] is None:
+                    continue
+                value = int(gold[minute])
+                if value == 0:
+                    timeline.append(f"{minute}分钟双方经济持平")
+                else:
+                    leader = radiant if value > 0 else dire
+                    timeline.append(f"{minute}分钟 {leader} 经济领先 {abs(value):,}")
+            recap = result + "。" + ("；".join(timeline) + "。" if timeline else "暂无可用的经济时间线，不能据最终人头数还原过程。")
+            row = evidence(item, "match_data", recap, f"https://www.opendota.com/matches/{match_id}", "OpenDota",
+                           game_number=index)
+            item.content_sections.append({"kind": "recap", "title": f"第{index}局回顾", "text": recap,
+                                          "evidence_ids": [row["id"]]})
             game_players = detail.get("players") or []
             series_winner_radiant = _team_matches(radiant, [series_winner])
             for player in game_players:
@@ -438,18 +480,19 @@ def enrich_match_reports(items: list[NewsItem]) -> list[str]:
                     continue
                 value = int(player.get("kills") or 0) * 3 + int(player.get("assists") or 0) - int(player.get("deaths") or 0) * 2 + int(player.get("hero_damage") or 0) / 5000
                 team_players = [candidate for candidate in game_players if bool(candidate.get("isRadiant")) == bool(player.get("isRadiant"))]
-                candidate_performances.append((value, player, team_players))
+                candidate_performances.append((value, player, team_players, index))
         item.summary = "；".join(narratives) + "。"
-        last = details[-1]
-        gold = [int(value or 0) for value in (last.get("radiant_gold_adv") or [])]
+        item.content_sections.sort(key=lambda section: int(re.search(r"\d+", section["title"]).group()))
+        last_index, _, last = details[-1]
+        gold = [int(value) for value in (last.get("radiant_gold_adv") or []) if value is not None and value != 0]
         sign_changes = sum(1 for left, right in zip(gold, gold[1:]) if (left < 0 < right) or (left > 0 > right))
         duration = round(int(last.get("duration") or 0) / 60)
         if duration >= 55 or sign_changes >= 3:
-            item.editorial_note = f"决胜局打了约 {duration} 分钟，经济领先至少 {sign_changes} 次易手，是一场拉扯明显的长局。"
+            item.editorial_note = f"第{last_index}局打了约 {duration} 分钟，已记录经济领先易手 {sign_changes} 次。时长和领先变化是数据观察，不足以判定具体团战或失误。"
         else:
-            item.editorial_note = f"决胜局约 {duration} 分钟结束；胜负转折应结合录像中的团战与关键技能进一步复盘。"
+            item.editorial_note = f"第{last_index}局约 {duration} 分钟结束。现有统计没有足够的团战过程证据，不将最终人头差等同于全程碾压。"
         if candidate_performances:
-            _, best, team_players = max(candidate_performances, key=lambda value: value[0])
+            _, best, team_players, best_game = max(candidate_performances, key=lambda value: value[0])
             alias = str(best.get("name") or best.get("personaname") or "关键选手")
             item.spotlights = [{
                 "label": "本报MVP",
@@ -459,6 +502,9 @@ def enrich_match_reports(items: list[NewsItem]) -> list[str]:
                 "hero": _hero_name(best.get("hero_id"), heroes),
                 "kda": f"{best.get('kills', 0)}/{best.get('deaths', 0)}/{best.get('assists', 0)}",
                 "hero_damage": int(best.get("hero_damage") or 0),
+                "game_number": best_game,
+                "role_inferred": True,
+                "basis": "以击杀、助攻、死亡与英雄伤害加权选出单局突出表现，并非官方奖项或系列赛综合评选。",
             }]
         last_players = last.get("players") or []
         last_radiant = str(last.get("radiant_name") or "天辉")
@@ -473,18 +519,19 @@ def enrich_match_reports(items: list[NewsItem]) -> list[str]:
             hero = _hero_name(key_player.get("hero_id"), heroes)
             role = _role(key_player, losing_players)
             item.spotlights.append({
-                "label": "末局关键选手", "player": alias, "team": str(item.metadata.get("loser") or ""),
+                "label": "末局关键选手" if last_index == len(item.metadata.get("match_ids", [])) else f"第{last_index}局关键选手", "player": alias, "team": str(item.metadata.get("loser") or ""),
                 "role": role, "hero": hero,
                 "kda": f"{key_player.get('kills', 0)}/{key_player.get('deaths', 0)}/{key_player.get('assists', 0)}",
                 "hero_damage": int(key_player.get("hero_damage") or 0),
+                "game_number": last_index, "role_inferred": True,
+                "basis": "本局败方英雄伤害最高的选手；伤害并不单独证明胜负原因。",
             })
             if "三号位" in role:
-                item.editorial_note += f" {alias} 在末局用三号位{hero}打出 {key_player.get('kills', 0)}/{key_player.get('deaths', 0)}/{key_player.get('assists', 0)}，但仍未能帮助队伍赢下系列赛。"
-        relation = str(item.metadata.get("china_relation") or "")
+                item.editorial_note += f" {alias} 在第{last_index}局用三号位{hero}打出 {key_player.get('kills', 0)}/{key_player.get('deaths', 0)}/{key_player.get('assists', 0)}；这项个人数据不单独解释系列赛结果。"
+        evidence(item, "match_data", item.editorial_note + "\n" + json.dumps(item.spotlights, ensure_ascii=False),
+                 item.url, "OpenDota · 本报数据评选")
         if item.impact:
             pass
-        elif relation:
-            item.impact = f"本系列赛涉及{relation}，因此进入中国 Dota 全量追踪。晋级或淘汰结论仅在赛事官方赛程能够确认时写入。"
         else:
-            item.impact = "该场进入全球焦点赛事栏；后续影响以赛事官方积分、分组或淘汰赛程为准。"
+            item.impact = "赛事阶段尚未完成核验，暂不判断晋级、败者组或淘汰；后续对阵待官方赛程确认。"
     return warnings

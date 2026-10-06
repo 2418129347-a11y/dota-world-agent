@@ -58,7 +58,7 @@ POLICY = {
     "china_match_limit": 8,
     "global_match_limit": 2,
     "tier1_league_keywords": ["The International", "PGL Wallachia", "BLAST SLAM", "DreamLeague", "ESL One"],
-    "tier1_player_movement_entities": ["Team Falcons", "Falcons", "BetBoom", "1Win", "skiter", "Sneyking", "Cr1t", "Aui_2000"],
+    "tier1_player_movement_entities": ["Team Falcons", "Falcons", "BetBoom", "1Win", "skiter", "Sneyking", "Cr1t", "Aui_2000", "Topson"],
     "china_clubs": ["LGD Gaming", "Yakult Brothers", "Yakult's Brothers", "Yakutou Brothers", "YkBros", "YB"],
     "affiliation_max_age_days": 14,
     "current_player_affiliations": {
@@ -545,7 +545,7 @@ class PipelineTests(unittest.TestCase):
         news.source_name = "GosuGamers"
         news.metadata["interest_category"] = "china_roster"
         apply_fallback([news])
-        self.assertEqual(news.title_zh, "Vici Gaming 宣布解散现有阵容")
+        self.assertEqual(news.title_zh, "Vici Gaming 阵容解散消息")
         self.assertIn("不等同于俱乐部永久退出", news.summary_zh)
 
     def test_idempotency_key_hides_recipient(self) -> None:

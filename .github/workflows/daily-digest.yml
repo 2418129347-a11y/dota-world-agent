@@ -7,6 +7,16 @@ on:
         description: "Optional Asia/Shanghai report date (YYYY-MM-DD)"
         required: false
         type: string
+      preview:
+        description: "Generate content preview only; never send or modify delivery state"
+        required: false
+        type: boolean
+        default: false
+      preview_fixture:
+        description: "Use clearly fictional editorial fixtures in preview mode only"
+        required: false
+        type: boolean
+        default: false
   schedule:
     # Beijing 07:43 waits until 08:00. Delayed runs deliver on the actual day.
     - cron: "43 23 * * *"
@@ -57,8 +67,8 @@ jobs:
       - name: Build digest
         shell: bash
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-5.4-nano' }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL || 'deepseek-flash' }}
           MAIL_PROVIDER: smtp
           SMTP_HOST: ${{ vars.SMTP_HOST || 'smtp.qq.com' }}
           SMTP_PORT: ${{ vars.SMTP_PORT || '465' }}
@@ -69,24 +79,34 @@ jobs:
           DIGEST_TO: ${{ secrets.DIGEST_TO || secrets.EMAIL_TO }}
           ENABLE_SEND: ${{ vars.ENABLE_SEND }}
           REPORT_DATE: ${{ inputs.date }}
+          PREVIEW_ONLY: ${{ inputs.preview }}
+          PREVIEW_FIXTURE: ${{ inputs.preview_fixture }}
         run: |
           args=(--output-dir output --state-file state/seen.json --summarizer auto)
           report_date="$REPORT_DATE"
           if [[ -n "$report_date" ]]; then
             args+=(--date "$report_date" --ignore-seen)
-          else
+          elif [[ "$PREVIEW_ONLY" != "true" ]]; then
             args+=(--write-state)
           fi
           if [[ -z "$report_date" ]]; then
             args+=(--skip-if-sent-today)
           fi
-          if [[ "$ENABLE_SEND" == "true" ]]; then
+          if [[ "$PREVIEW_ONLY" == "true" ]]; then
+            args+=(--ignore-seen)
+            if [[ "$PREVIEW_FIXTURE" == "true" ]]; then
+              args+=(--fixture tests/fixtures/editorial_items.json)
+              if [[ -z "$report_date" ]]; then
+                args+=(--date 2026-10-06)
+              fi
+            fi
+          elif [[ "$ENABLE_SEND" == "true" ]]; then
             args+=(--send)
           fi
           python .agents/skills/dota-world-digest/scripts/dota_digest.py "${args[@]}"
 
       - name: Save delivery state even after an ambiguous SMTP failure
-        if: always() && hashFiles('state/seen.json') != ''
+        if: always() && inputs.preview != true && hashFiles('state/seen.json') != ''
         uses: actions/cache/save@v4
         with:
           path: state
@@ -94,7 +114,7 @@ jobs:
 
       - name: Verify actual email delivery
         id: health
-        if: always()
+        if: always() && inputs.preview != true
         env:
           ENABLE_SEND: ${{ vars.ENABLE_SEND }}
           PRIOR_STATUS: ${{ job.status }}
@@ -110,8 +130,8 @@ jobs:
           retention-days: 14
 
   notify:
+    if: always() && inputs.preview != true
     needs: [time_gate, digest]
-    if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

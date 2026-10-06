@@ -25,7 +25,8 @@
 - 敏感消息要求官方来源或足够的独立交叉信源；正式禁赛等处罚会报道，但与处罚同时出现的假赛过程、金额和关联人员传闻不会自动当成事实。
 - 支持 HTML 与纯文本邮件、QQ SMTP 和 Resend。
 - 支持按北京时间指定自然日补发，不污染日常去重状态。
-- OpenAI 摘要为可选项；没有 API Key 时使用确定性降级文案。
+- DeepSeek 自动摘编正文和赛后讨论，生成分段回顾与圈内情报；失败时明确标注简版，不调用 GPT。
+- 中国相关比赛目标 500—800 字，其他焦点比赛 250—400 字，圈内情报 150—300 字；信息不足不凑字数，链接只用于查证。
 
 ## 工作流程
 
@@ -76,6 +77,8 @@ python -m unittest discover -s tests -v
 
 QQ SMTP 的最小配置：
 
+完整中文摘要另需 `DEEPSEEK_API_KEY`，可选 `DEEPSEEK_MODEL` 默认 `deepseek-flash`。只请求官方 DeepSeek API，使用非思考模式；每次运行最多五次请求、每次 45 秒及 6,000 输出 tokens，不自动重试付费请求。API 按量计费，密钥或额度不可用时降级，绝不切回 GPT。
+
 | 变量 | 必需 | 说明 |
 | --- | --- | --- |
 | `MAIL_PROVIDER` | 是 | 使用 `smtp` |
@@ -105,12 +108,16 @@ python .agents/skills/dota-world-digest/scripts/dota_digest.py \
 
 指定日期补发：在 GitHub Actions 手动运行页面填写 `date`，格式为 `YYYY-MM-DD`。详细步骤见 [部署指南](docs/DEPLOYMENT.md)。
 
+验证内容时选择 `preview=true`：只生成 HTML、纯文本与报告，不发邮件、不更新投递去重状态、不创建或关闭故障 Issue。新版内容启用前先配置 Secret `DEEPSEEK_API_KEY`，检查预览的 `summarizer`、逐段证据和 `content_status`。
+
 ## 数据来源与内容规则
 
 - Steam / Dota 2 官方新闻：官方公告与版本更新。
 - OpenDota：职业赛果和公开比赛数据。
 - Tier 1 赛程快照：显示已核验的具体北京时间、双方、阶段、BoX 和淘汰属性；只有赛事、双方、日期和淘汰阶段全部匹配，才写入晋级或出局结论。
 - RSS 与媒体白名单：新闻发现；邮件显示原始出版方，而不是聚合器名称。
+- 入选新闻补充公开正文，遵守白名单、robots 和每篇 6,000 字符上限；打不开的聚合链接不会被虚构成正文。比赛复盘覆盖全部已采集局数，数据缺失保留局号。
+- 比赛点评单独检索匹配赛事、双方及日期的赛后讨论，最多两个帖子、每帖五条有效高赞评论；社区观点独立标注，不当作比赛事实或普遍共识。详情、正文和讨论补充采集共享三分钟预算。
 - Reddit：在最近 48 小时内，按类别门槛收录中国相关或 Tier 1 选手动向传闻；中国消息默认要求至少 300 赞同、50 条评论，全球顶级动向默认要求至少 120 赞同、35 条评论。转会集中讨论帖只提取与关注战队/选手有关的高热度线索，始终标记为未经官宣。帖子若直接链接到白名单内的俱乐部或赛事方官方账号，可作为官方公告的发现入口；邮件只确认公告明确给出的处罚。
 
 中国俱乐部、已核验的当前选手归属和兴趣权重位于：
@@ -129,15 +136,16 @@ Tier 1 日期、官方链接和已核验的淘汰赛阶段位于：
 
 ## 安全与隐私
 
-- 不要把 SMTP 授权码、GitHub Token、OpenAI API Key 或真实 `.env` 提交到仓库。
+- 不要把 SMTP 授权码、GitHub Token、DeepSeek API Key 或真实 `.env` 提交到仓库。
 - 所有采集文本都按不可信输入处理，摘要器不会执行文章中的指令。
 - 项目不绕过登录、付费墙、robots 控制或反爬限制。
-- 邮件只包含短摘要和原始链接，不复制完整文章。
+- 邮件以独立摘编、比赛回顾和观点摘要为正文，原始链接用于核验，不复制完整文章。
 - 发现安全问题请阅读 [安全政策](SECURITY.md)，不要在公开 Issue 中披露凭据。
 
 ## 已知限制
 
 - OpenDota、RSS 或媒体站点延迟时，部分消息可能晚出现。
+- DeepSeek 输出需通过格式、引用及可核查数字/别名校验，但这不等于完整语义核验；来源缺失或模型失败会减少内容。报告记录降级原因和实际 tokens 用量。
 - 选手位置根据线路和经济数据推断，不等同于战队官方分工。
 - “本报 MVP”是本项目的数据化评选，不是赛事官方奖项。
 - 当天高可信圈内消息不足两条时会少发，不使用低质量内容填充。
@@ -156,6 +164,6 @@ Tier 1 日期、官方链接和已核验的淘汰赛阶段位于：
 
 ## English summary
 
-DOTA Daily Digest is an unofficial, open-source Chinese Dota 2 news agent. It collects official news, public professional-match data, and allowlisted media signals; merges games into series reports; adds player, hero, KDA, damage, and impact context; and delivers an HTML/text email through GitHub Actions. OpenAI summarization is optional, and the pipeline runs with a deterministic fallback when no API key is configured.
+DOTA Daily Digest is an unofficial, open-source Chinese Dota 2 news agent. It collects official news, public professional-match data, and allowlisted media signals; merges games into series reports; adds player, hero, KDA, damage, and verified impact context; and delivers an HTML/text email through GitHub Actions. DeepSeek summarizes bounded public articles and match discussions into evidence-linked Chinese paragraphs. Failures visibly degrade to deterministic summaries; GPT is never called.
 
 See [Quick Start](#快速开始), [Deployment](docs/DEPLOYMENT.md), [Security](SECURITY.md), and [Contributing](CONTRIBUTING.md).
