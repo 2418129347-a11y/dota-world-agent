@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 from .collectors import collect_all
 from .editorial import apply_external_match_impacts, compose_digest, enrich_match_reports, merge_match_series
-from .mailer import send_email
+from .mailer import AmbiguousDeliveryError, send_email
 from .models import NewsItem
 from .pipeline import select_items
 from .render import render_html, render_text
@@ -47,6 +47,7 @@ def _write_state(
     sent_dates: set[str],
     items: list[NewsItem],
     delivered_date: str | None = None,
+    uncertain_dates: set[str] | None = None,
 ) -> None:
     values = set(previous)
     for item in items:
@@ -57,7 +58,8 @@ def _write_state(
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(
-            {"seen": sorted(values)[-2000:], "sent_dates": sorted(sent_dates)[-90:]},
+            {"seen": sorted(values)[-2000:], "sent_dates": sorted(sent_dates)[-90:],
+             "uncertain_dates": sorted(uncertain_dates or set())[-90:]},
             ensure_ascii=False,
             indent=2,
         ) + "\n",
@@ -117,6 +119,7 @@ def run(argv: list[str] | None = None) -> int:
     state = _load_state(args.state_file)
     seen = set() if args.ignore_seen else set(state.get("seen", []))
     sent_dates = set(state.get("sent_dates", []))
+    uncertain_dates = set(state.get("uncertain_dates", []))
     selected = select_items(collected, ranking, seen, now, editorial_policy)
     selected = compose_digest(selected, editorial_policy)
     apply_verified_schedule_context(selected, tier1_calendar)
@@ -137,28 +140,45 @@ def run(argv: list[str] | None = None) -> int:
     text_path.write_text(text_body, encoding="utf-8")
     delivery: dict = {"requested": args.send, "sent": False}
     delivery_date = now.astimezone(DISPLAY_TZ).date().isoformat()
+    exit_code = 0
     if args.send:
         if args.skip_if_sent_today and delivery_date in sent_dates:
             delivery = {"requested": True, "sent": False, "skipped": True, "reason": "already_sent_today"}
+        elif delivery_date in uncertain_dates:
+            delivery = {"requested": True, "sent": False, "skipped": True, "reason": "delivery_uncertain_requires_review"}
+            exit_code = 1
         else:
-            response = send_email(subject, html_body, text_body, now.astimezone(DISPLAY_TZ).date())
-            delivery = {
-                "requested": True,
-                "sent": True,
-                "provider": response.get("provider"),
-                "provider_id": response.get("id"),
-            }
+            try:
+                response = send_email(subject, html_body, text_body, now.astimezone(DISPLAY_TZ).date())
+                delivery = {
+                    "requested": True,
+                    "sent": True,
+                    "provider": response.get("provider"),
+                    "provider_id": response.get("id"),
+                }
+            except Exception as exc:
+                ambiguous = isinstance(exc, AmbiguousDeliveryError)
+                if ambiguous:
+                    uncertain_dates.add(delivery_date)
+                delivery = {
+                    "requested": True, "sent": False,
+                    "reason": "delivery_uncertain_requires_review" if ambiguous else "send_failed",
+                    "error_type": type(exc).__name__,
+                }
+                exit_code = 1
     if args.write_state:
         _write_state(
             args.state_file,
             seen,
             sent_dates,
-            [] if delivery.get("skipped") else selected,
+            selected if delivery.get("sent") or not args.send else [],
             delivery_date if delivery.get("sent") else None,
+            uncertain_dates,
         )
     report = {
         "generated_at": now.isoformat(),
         "report_date": target_date.isoformat() if target_date else stamp,
+        "delivery_date": delivery_date,
         "subject": subject,
         "collected_count": len(collected),
         "selected_count": len(selected),
@@ -170,7 +190,7 @@ def run(argv: list[str] | None = None) -> int:
     }
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({key: report[key] for key in ("subject", "collected_count", "selected_count", "summarizer", "warnings", "delivery", "outputs")}, ensure_ascii=False, indent=2))
-    return 0
+    return exit_code
 
 
 if __name__ == "__main__":

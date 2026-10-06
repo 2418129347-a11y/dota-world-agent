@@ -29,7 +29,7 @@ Read `references/output-contract.md` before changing the email layout or summary
 
 ## Scheduling
 
-Use the repository workflow at `.github/workflows/daily-digest.yml`. Keep `ENABLE_SEND` unset or false during shadow runs. Store credentials only in GitHub Actions secrets. Preserve the three bounded heartbeat triggers, the early-run wait until 08:00 Asia/Shanghai, the 09:30 late cutoff, SMTP login/connect retries, and the per-day delivery guard so delayed runs cannot send at 11:00 or send duplicates. Never retry an ambiguous failure after SMTP message transmission has begun. Maintain verified Tier 1 dates, fixtures, and stage snapshots in `references/tier1-events.json`; the email renders exact Beijing time, teams, stage, BoX, and elimination status when the source has published them, and otherwise shows an explicit pending state instead of guessing.
+Use the repository workflow at `.github/workflows/daily-digest.yml`. Store credentials only in GitHub Actions secrets. Preserve the four Beijing triggers (07:43, 08:17, 09:17, 16:19), the early-run wait until 08:00 Asia/Shanghai, and the per-day delivery guard for scheduled and ordinary manual runs. Delayed scheduled runs send on their actual Beijing calendar day; there is no 09:30 cutoff. GitHub cannot guarantee punctual execution or creation of every scheduled run. Verify `report.json` and recorded delivery dates, rather than treating a green workflow as proof of sending. Fail closed for disabled sending, missing reports, or SMTP failures; the separate notification job maintains a GitHub failure Issue and closes it on verified recovery. Keep `ENABLE_SEND` unset or false for intentional shadow previews outside the production delivery workflow. Preserve SMTP login/connect retries. Never retry after SMTP transmission has begun: persist an uncertain-day block for subsequent heartbeats until receipt is manually checked. Maintain verified Tier 1 dates, fixtures, and stage snapshots in `references/tier1-events.json`; the email renders exact Beijing time, teams, stage, BoX, and elimination status when the source has published them, and otherwise shows an explicit pending state instead of guessing.
 
 ## Hard boundaries
 
@@ -47,6 +47,7 @@ Use the repository workflow at `.github/workflows/daily-digest.yml`. Keep `ENABL
 
 - `scripts/dota_digest.py`: pipeline entry point.
 - `scripts/dota_news/`: collectors, normalization, summarization, rendering, and delivery modules.
+- `scripts/dota_news/workflow_ops.py`: testable Beijing clock, delivery-health checks, and GitHub failure-Issue lifecycle.
 - `references/sources.json`: source and ranking configuration.
 - `references/source-policy.md`: source tiers and verification policy.
 - `references/editorial-policy.json`: user interests, Chinese club/player watchlists, limits, and circle-news weights.

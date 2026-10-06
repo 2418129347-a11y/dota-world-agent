@@ -8,11 +8,11 @@ on:
         required: false
         type: string
   schedule:
-    # Low-contention Beijing heartbeats: 07:43 waits until 08:00, then 08:17
-    # and 09:17 provide bounded fallbacks. Runs after 09:29 are still rejected.
+    # Beijing 07:43 waits until 08:00. Delayed runs deliver on the actual day.
     - cron: "43 23 * * *"
     - cron: "17 0 * * *"
     - cron: "17 1 * * *"
+    - cron: "19 8 * * *"
 
 permissions:
   contents: read
@@ -24,38 +24,17 @@ concurrency:
 jobs:
   time_gate:
     runs-on: ubuntu-latest
-    outputs:
-      should_run: ${{ steps.clock.outputs.should_run }}
-      local_time: ${{ steps.clock.outputs.local_time }}
     steps:
+      - uses: actions/checkout@v4
       - name: Check actual Beijing delivery window
-        id: clock
-        shell: bash
-        run: |
-          local_time="$(TZ=Asia/Shanghai date +%Y-%m-%dT%H:%M:%S%z)"
-          hour="$(TZ=Asia/Shanghai date +%H)"
-          minute="$(TZ=Asia/Shanghai date +%M)"
-          minute_of_day=$((10#$hour * 60 + 10#$minute))
-          should_run=false
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            should_run=true
-          elif (( minute_of_day >= 390 && minute_of_day < 570 )); then
-            should_run=true
-            if (( minute_of_day < 480 )); then
-              wait_seconds=$(( (480 - minute_of_day) * 60 ))
-              echo "Early heartbeat at $local_time; waiting ${wait_seconds}s for 08:00 Asia/Shanghai"
-              sleep "$wait_seconds"
-              local_time="$(TZ=Asia/Shanghai date +%Y-%m-%dT%H:%M:%S%z)"
-            fi
-          fi
-          echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
-          echo "local_time=$local_time" >> "$GITHUB_OUTPUT"
-          echo "Asia/Shanghai now: $local_time; should run: $should_run"
+        run: python .agents/skills/dota-world-digest/scripts/dota_news/workflow_ops.py gate
 
   digest:
     needs: time_gate
-    if: needs.time_gate.outputs.should_run == 'true'
     runs-on: ubuntu-latest
+    outputs:
+      delivery_ok: ${{ steps.health.outputs.delivery_ok }}
+      reason: ${{ steps.health.outputs.reason }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -65,7 +44,7 @@ jobs:
           python-version: "3.12"
 
       - name: Restore seen-item state
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: state
           key: dota-digest-state-${{ github.run_id }}
@@ -89,21 +68,37 @@ jobs:
           DIGEST_FROM: ${{ secrets.DIGEST_FROM }}
           DIGEST_TO: ${{ secrets.DIGEST_TO || secrets.EMAIL_TO }}
           ENABLE_SEND: ${{ vars.ENABLE_SEND }}
+          REPORT_DATE: ${{ inputs.date }}
         run: |
           args=(--output-dir output --state-file state/seen.json --summarizer auto)
-          report_date="${{ inputs.date }}"
+          report_date="$REPORT_DATE"
           if [[ -n "$report_date" ]]; then
             args+=(--date "$report_date" --ignore-seen)
           else
             args+=(--write-state)
           fi
-          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+          if [[ -z "$report_date" ]]; then
             args+=(--skip-if-sent-today)
           fi
           if [[ "$ENABLE_SEND" == "true" ]]; then
             args+=(--send)
           fi
           python .agents/skills/dota-world-digest/scripts/dota_digest.py "${args[@]}"
+
+      - name: Save delivery state even after an ambiguous SMTP failure
+        if: always() && hashFiles('state/seen.json') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: state
+          key: dota-digest-state-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Verify actual email delivery
+        id: health
+        if: always()
+        env:
+          ENABLE_SEND: ${{ vars.ENABLE_SEND }}
+          PRIOR_STATUS: ${{ job.status }}
+        run: python .agents/skills/dota-world-digest/scripts/dota_news/workflow_ops.py health
 
       - name: Upload digest and report
         if: always()
@@ -113,3 +108,22 @@ jobs:
           path: output
           if-no-files-found: warn
           retention-days: 14
+
+  notify:
+    needs: [time_gate, digest]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update or close the delivery failure issue
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          DELIVERY_OK: ${{ needs.digest.outputs.delivery_ok }}
+          DELIVERY_REASON: ${{ needs.digest.outputs.reason }}
+          DIGEST_RESULT: ${{ needs.digest.result }}
+          GATE_RESULT: ${{ needs.time_gate.result }}
+        run: python .agents/skills/dota-world-digest/scripts/dota_news/workflow_ops.py notify
